@@ -8,6 +8,7 @@ import { DeploymentTrigger } from "@prisma/client";
 import { GitHubService } from "./github.service.js";
 import { PrismaService } from "./prisma.service.js";
 import { QueueService } from "./queue.service.js";
+import { createWorkerToken, hashWorkerToken, workerTokenMatches } from "./worker-auth.js";
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "");
 
@@ -53,6 +54,27 @@ class AppController {
     const deployment = await db.deployment.create({ data: { repositoryId, configId: config.id, environmentId: environment.id, targetWorkerId: body.workerId, commitSha, trigger: DeploymentTrigger.MANUAL, stages: { create: ["dependencies", "tests", "docker-build", "health-check", "deploy"].map((name) => ({ name })) } } });
     await this.queue.enqueue(deployment.id);
     return { id: deployment.id, status: deployment.status, commitSha: deployment.commitSha };
+  }
+
+  @Post("/v1/repositories/:repositoryId/workers/register")
+  async registerWorker(@Req() request: Request, @Param("repositoryId") repositoryId: string, @Body() body: { name: string; version: string; maxConcurrency?: number }) {
+    const user = await this.auth.user(request);
+    if (!body.name || !body.version) throw new BadRequestException("name and version are required");
+    const repository = await db.repository.findFirst({ where: { id: repositoryId, ownerId: user.id } });
+    if (!repository) throw new NotFoundException("Repository not found");
+    const token = createWorkerToken();
+    const worker = await db.worker.create({ data: { repositoryId, name: body.name, version: body.version, tokenHash: hashWorkerToken(token), capabilities: { docker: true, maxConcurrency: Math.min(body.maxConcurrency ?? 1, 2) } } });
+    return { workerId: worker.id, token, warning: "Store this token securely. It will not be shown again." };
+  }
+
+  @Post("/v1/workers/:workerId/heartbeat")
+  async heartbeat(@Req() request: Request, @Param("workerId") workerId: string, @Body() body: { version?: string }) {
+    const authorization = request.headers.authorization;
+    const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
+    const worker = await db.worker.findUnique({ where: { id: workerId } });
+    if (!worker || worker.revokedAt || !workerTokenMatches(token, worker.tokenHash)) throw new UnauthorizedException();
+    const updated = await db.worker.update({ where: { id: workerId }, data: { lastSeenAt: new Date(), version: body.version ?? worker.version } });
+    return { workerId: updated.id, status: "ONLINE", lastSeenAt: updated.lastSeenAt };
   }
 }
 

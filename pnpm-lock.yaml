@@ -96,6 +96,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@deploypilot/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       bullmq:
         specifier: ^5.34.3
         version: 5.81.4
@@ -131,6 +134,8 @@ importers:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
+
+  packages/shared: {}
 
 packages:
 

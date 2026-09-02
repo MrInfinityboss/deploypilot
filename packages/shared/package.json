@@ -1,0 +1,6 @@
+{
+  "name": "@deploypilot/shared",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./index.ts" }
+}
