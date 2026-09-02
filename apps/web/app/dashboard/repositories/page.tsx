@@ -1,23 +1,4 @@
 "use client";
-
-import { useState } from "react";
-import { apiRequest } from "../../../lib/api";
-
-type Repository = { id: string; fullName: string; defaultBranch: string; githubRepoId: string };
-
-export default function RepositoriesPage() {
-  const [installationId, setInstallationId] = useState("");
-  const [repositories, setRepositories] = useState<Repository[]>([]);
-  const [status, setStatus] = useState("Connect a GitHub App installation to sync repositories.");
-
-  const sync = async () => {
-    if (!installationId.trim()) { setStatus("Enter your GitHub App installation ID."); return; }
-    try {
-      const result = await apiRequest<{ repositories: Repository[] }>(`/v1/github/installations/${encodeURIComponent(installationId)}/repositories`);
-      setRepositories(result.repositories);
-      setStatus(`${result.repositories.length} repositories synchronized.`);
-    } catch (error) { setStatus(error instanceof Error ? error.message : "Unable to sync repositories."); }
-  };
-
-  return <main style={{ padding: 40, maxWidth: 900 }}><p style={{ color: "#64748b" }}>SETUP</p><h1>Repositories</h1><p style={{ color: "#475569" }}>Choose which GitHub repositories DeployPilot is allowed to build and run.</p><div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 12, padding: 24, marginTop: 28, maxWidth: 600 }}><label htmlFor="installation">GitHub installation ID</label><input id="installation" value={installationId} onChange={(event) => setInstallationId(event.target.value)} placeholder="e.g. 12345678" style={{ display: "block", width: "100%", padding: 12, margin: "8px 0 16px", border: "1px solid #cbd5e1", borderRadius: 8 }} /><button onClick={sync} style={{ padding: "10px 16px", borderRadius: 8, cursor: "pointer" }}>Sync repositories</button><p style={{ color: "#64748b" }}>{status}</p></div><div style={{ display: "grid", gap: 12, marginTop: 24 }}>{repositories.map((repo) => <article key={repo.id} style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 10, padding: 18 }}><strong>{repo.fullName}</strong><div style={{ color: "#64748b", marginTop: 8 }}>default: {repo.defaultBranch}</div><div style={{ marginTop: 10, fontSize: 13 }}>Repository ID: <code style={{ userSelect: "all" }}>{repo.id}</code></div></article>)}</div></main>;
-}
+import { useState } from "react"; import Link from "next/link"; import { apiRequest } from "../../../lib/api"; import { Card,PageHeader,Badge,Empty } from "../ui";
+type Repo={id:string;fullName:string;defaultBranch:string;githubRepoId:string};
+export default function RepositoriesPage(){const [installationId,setInstallationId]=useState("");const [repos,setRepos]=useState<Repo[]>(()=>{if(typeof window==='undefined')return[];try{return JSON.parse(localStorage.getItem('dp_repos')||'[]')}catch{return[]}});const [status,setStatus]=useState("Ready to sync");const sync=async()=>{if(!installationId.trim())return setStatus("Enter your GitHub App installation ID.");try{const r=await apiRequest<{repositories:Repo[]}>(`/v1/github/installations/${encodeURIComponent(installationId)}/repositories`);setRepos(r.repositories);localStorage.setItem('dp_repos',JSON.stringify(r.repositories));setStatus(`${r.repositories.length} repositories synchronized.`)}catch(e){setStatus(e instanceof Error?e.message:'Unable to sync repositories.')}};return <><PageHeader eyebrow="Setup / Source control" title="Repositories" description="Choose which GitHub repositories DeployPilot is allowed to build and run." action={<Link className="dp-btn dp-btn-primary" href="/dashboard/deploy">＋ New deployment</Link>}/><Card style={{marginBottom:18}}><div style={{display:"flex",gap:10,alignItems:"end",flexWrap:"wrap"}}><label className="dp-label" style={{flex:1,minWidth:240}}>GitHub installation ID<input className="dp-input" value={installationId} onChange={e=>setInstallationId(e.target.value)} placeholder="e.g. 158508978"/></label><button className="dp-btn dp-btn-primary" onClick={sync}>Sync repositories</button></div><div style={{color:"var(--muted)",fontSize:12,marginTop:13}}>{status}</div></Card><div style={{display:"grid",gap:12}}>{repos.length?repos.map(repo=><Card key={repo.id} style={{padding:18,display:"flex",justifyContent:"space-between",gap:18,alignItems:"center",flexWrap:"wrap"}}><div><div style={{display:"flex",gap:10,alignItems:"center"}}><span style={{color:"var(--green)"}}>●</span><strong>{repo.fullName}</strong><Badge status="SYNCED"/></div><div className="dp-mono" style={{color:"var(--muted)",fontSize:11,marginTop:9}}>default: {repo.defaultBranch} · id: {repo.id}</div></div><div style={{display:"flex",gap:8}}><Link className="dp-btn" href={`/dashboard/deploy?repositoryId=${repo.id}`}>Configure</Link><Link className="dp-btn dp-btn-primary" href={`/dashboard/deploy?repositoryId=${repo.id}`}>Deploy →</Link></div></Card>):<Empty title="No repositories synced" text="Install the DeployPilot GitHub App, then paste the installation ID above."/>}</div></>}

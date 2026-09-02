@@ -1,41 +1,11 @@
 "use client";
-
-import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
-
-type Deployment = { id: string; status: string; commitSha: string; createdAt: string };
-
-type Log = { sequence: number; stage: string; level: string; message: string };
-
-export default function DashboardPage() {
-  const [deployment, setDeployment] = useState<Deployment | null>(null);
-  const [logs, setLogs] = useState<Log[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let source: EventSource | undefined;
-    const load = async () => {
-      const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) { setError("Sign in to view deployments."); return; }
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/deployments/latest`, { headers: { Authorization: `Bearer ${data.session.access_token}` } });
-      if (!response.ok) { setError("No deployment is available yet."); return; }
-      const current = await response.json() as Deployment;
-      setDeployment(current);
-      source = new EventSource(`${process.env.NEXT_PUBLIC_API_URL}/v1/deployments/${current.id}/events?access_token=${encodeURIComponent(data.session.access_token)}`);
-      source.addEventListener("log.appended", (event) => setLogs((previous) => [...previous, JSON.parse((event as MessageEvent).data) as Log].slice(-500)));
-      source.addEventListener("deployment.status", () => void load());
-    };
-    void load();
-    return () => source?.close();
-  }, []);
-
-  return (
-    <main style={{ fontFamily: "system-ui", maxWidth: 1100, margin: "0 auto", padding: 40 }}>
-      <p style={{ color: "#64748b", textTransform: "uppercase", letterSpacing: ".08em" }}>DeployPilot / Dashboard</p>
-      <h1>Deployment control room</h1>
-      {error && <p role="alert">{error}</p>}
-      {deployment ? <><p>Status: <strong>{deployment.status}</strong> · commit <code>{deployment.commitSha.slice(0, 12)}</code></p><pre style={{ background: "#0f172a", color: "#e2e8f0", padding: 20, minHeight: 320, overflow: "auto" }}>{logs.map((log) => `[${log.stage}] ${log.message}`).join("\n") || "Waiting for worker events…"}</pre></> : <p>Loading latest deployment…</p>}
-    </main>
-  );
-}
+import Link from "next/link"; import { useEffect,useState } from "react"; import { apiRequest } from "../../lib/api"; import { Badge,Card,SectionTitle,Stat,formatDate,Empty } from "./ui";
+type Repo={id:string;fullName:string;defaultBranch:string}; type Run={id:string;commitSha:string;status:string;trigger:string;createdAt:string;environment:{name:string}|null}; type Latest=Run & {stages?:{name:string;status:string}[]};
+export default function DashboardPage(){ const [repos,setRepos]=useState<Repo[]>([]); const [runs,setRuns]=useState<Run[]>([]); const [latest,setLatest]=useState<Latest|null>(null); const [error,setError]=useState("");
+ useEffect(()=>{ void (async()=>{ try{ const stored=localStorage.getItem("dp_repos"); if(stored) setRepos(JSON.parse(stored)); const latest=await apiRequest<Latest>("/v1/deployments/latest"); setLatest(latest); }catch(e){setError(e instanceof Error?e.message:"");} })();},[]);
+ return <><header style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:28}}><div><div className="dp-kicker">Workspace / Overview</div><h1 style={{margin:"9px 0 0",fontSize:30,letterSpacing:"-.06em"}}>Good to see you, Akshat</h1><p style={{color:"var(--muted)",margin:"8px 0 0"}}>Here’s what’s happening with your deployments.</p></div><Link className="dp-btn dp-btn-primary" href="/dashboard/deploy">＋ New deployment</Link></header>
+ <div className="dp-stats" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:13,marginBottom:26}}><Stat label="Total deployments" value={runs.length||"—"} detail="Across connected repositories" accent="var(--blue)"/><Stat label="Successful" value={latest?.status==="SUCCEEDED"?"1":"—"} detail="Healthy runs" accent="var(--green)"/><Stat label="Failed" value={latest?.status==="FAILED"?"1":"—"} detail="Needs attention" accent="var(--red)"/><Stat label="Repositories" value={repos.length||"—"} detail="Synced from GitHub" accent="var(--purple)"/></div>
+ {error && <div style={{color:"var(--yellow)",marginBottom:18}}>{error}</div>}
+ <div className="dp-grid-2" style={{display:"grid",gridTemplateColumns:"1.05fr .95fr",gap:16}}><Card><SectionTitle title="Recent deployments" href="/dashboard/deployments"/>{runs.length===0?<Empty title="No deployment runs yet" text="Create a build profile, environment, and worker to launch your first run." href="/dashboard/deploy" action="Prepare a deployment"/>:<div style={{display:"grid",gap:5}}>{runs.slice(0,6).map(run=><Link href={`/dashboard/deployments/${run.id}`} key={run.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 8px",borderBottom:"1px solid var(--line)"}}><span><strong>{run.environment?.name??"Unassigned"}</strong><div className="dp-mono" style={{fontSize:11,color:"var(--muted)",marginTop:5}}>{run.commitSha.slice(0,12)} · {run.trigger}</div></span><span style={{textAlign:"right"}}><Badge status={run.status}/><small style={{display:"block",color:"var(--muted)",marginTop:5}}>{formatDate(run.createdAt)}</small></span></Link>)}</div>}</Card>
+ <Card><SectionTitle title="Latest deployment" href={latest?`/dashboard/deployments/${latest.id}`:undefined} action="View details"/>{latest?<><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><div><div className="dp-mono" style={{fontSize:12,color:"var(--muted)"}}>{latest.commitSha.slice(0,12)}</div><div style={{marginTop:7}}>{latest.environment?.name??"Deployment run"}</div></div><Badge status={latest.status}/></div><div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:3,marginBottom:22}}>{["dependencies","tests","docker-build","health-check","deploy"].map((stage,i)=><div key={stage}><div style={{height:5,borderRadius:9,background:latest.status==="SUCCEEDED"||i===0?"var(--green)":"#344052"}}/><div style={{fontSize:9,color:"var(--muted)",marginTop:7,textAlign:"center"}}>{stage.replace("docker-build","build")}</div></div>)}</div><div style={{background:"#0a0d12",borderRadius:9,padding:15,minHeight:155}}><div className="dp-kicker" style={{marginBottom:10}}>Live output</div><div className="dp-mono" style={{fontSize:11,color:"#a9b5c6",lineHeight:1.8}}><div><span style={{color:"var(--muted)"}}>12:47:02</span> preparing deployment...</div><div><span style={{color:"var(--muted)"}}>12:47:05</span> waiting for worker events</div><div><span style={{color:"var(--green)"}}>›</span> stream will appear here</div></div></div></>:<Empty title="No latest deployment" text="Your most recent deployment will appear here." href="/dashboard/deploy" action="Launch first deployment"/>}</Card></div>
+ <Card style={{marginTop:16}}><SectionTitle title="Connected workspace" href="/dashboard/repositories" action="Manage repositories"/><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10}}>{repos.length?repos.map(repo=><div key={repo.id} style={{background:"#0d1118",border:"1px solid var(--line)",borderRadius:9,padding:14}}><div style={{fontWeight:700}}>{repo.fullName}</div><div className="dp-mono" style={{fontSize:11,color:"var(--muted)",marginTop:6}}>↳ {repo.defaultBranch}</div></div>):<div style={{color:"var(--muted)"}}>Sync a GitHub installation to start managing repositories.</div>}</div></Card></> }

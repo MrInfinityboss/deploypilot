@@ -1,23 +1,3 @@
 "use client";
-
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
-
-export default function LoginPage() {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-    void supabase.auth.getSession().then(({ data }) => { if (data.session) router.replace("/dashboard"); });
-  }, [router]);
-
-  const signIn = async () => {
-    const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-    const { error: authError } = await supabase.auth.signInWithOAuth({ provider: "github", options: { redirectTo: `${window.location.origin}/auth/callback` } });
-    if (authError) setError(authError.message);
-  };
-
-  return <main style={{ maxWidth: 520, margin: "0 auto", padding: 64, fontFamily: "system-ui" }}><p style={{ color: "#64748b", textTransform: "uppercase", letterSpacing: ".08em" }}>DeployPilot</p><h1>Sign in to manage deployments</h1><p style={{ color: "#475569" }}>Connect GitHub to choose repositories and receive push-triggered deployments.</p><button onClick={signIn} style={{ padding: "12px 18px", borderRadius: 8, cursor: "pointer" }}>Continue with GitHub</button>{error && <p role="alert" style={{ color: "#b91c1c" }}>{error}</p>}</main>;
-}
+import Link from "next/link"; import { useEffect,useState } from "react"; import { useRouter } from "next/navigation"; import { createBrowserClient } from "@supabase/ssr";
+export default function LoginPage(){const router=useRouter();const [error,setError]=useState('');useEffect(()=>{const s=createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);void s.auth.getSession().then(({data})=>{if(data.session)router.replace('/dashboard')})},[router]);const signIn=async()=>{const s=createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);const {error:e}=await s.auth.signInWithOAuth({provider:'github',options:{redirectTo:`${window.location.origin}/auth/callback`}});if(e)setError(e.message)};return <main style={{minHeight:'100vh',display:'grid',placeItems:'center',padding:24,background:'radial-gradient(circle at 50% 20%,#1b253f 0,transparent 45%),var(--bg)'}}><div style={{width:'100%',maxWidth:430}}><Link href="/" style={{display:'block',textAlign:'center',fontSize:19,fontWeight:800,marginBottom:30}}><span style={{color:'var(--green)',marginRight:9}}>✦</span>DeployPilot</Link><section className="dp-card" style={{padding:30}}><div className="dp-kicker">Secure access</div><h1 style={{fontSize:27,letterSpacing:'-.06em',margin:'12px 0 9px'}}>Sign in to your control room</h1><p style={{color:'var(--muted)',lineHeight:1.6,fontSize:13}}>Use GitHub to connect your repositories and manage deployments on infrastructure you own.</p><button className="dp-btn dp-btn-primary" onClick={signIn} style={{width:'100%',marginTop:16}}>Continue with GitHub <span style={{float:'right'}}>↗</span></button>{error&&<p role="alert" style={{color:'var(--red)',fontSize:12}}>{error}</p>}<p style={{color:'var(--muted)',fontSize:11,lineHeight:1.5,marginTop:22}}>Your provider credentials remain server-side. DeployPilot never displays or stores your GitHub password.</p></section><Link href="/" style={{display:'block',textAlign:'center',color:'var(--muted)',fontSize:12,marginTop:20}}>← Back to DeployPilot</Link></div></main>}
