@@ -169,6 +169,23 @@ class AppController {
     return { workerId: worker.id, token, warning: "Store this token securely. It will not be shown again." };
   }
 
+  @Get("/v1/repositories/:repositoryId/workers")
+  async workers(@Req() request: Request, @Param("repositoryId") repositoryId: string) {
+    const user = await this.auth.user(request);
+    const repository = await db.repository.findFirst({ where: { id: repositoryId, ownerId: user.id }, select: { id: true } });
+    if (!repository) throw new NotFoundException("Repository not found");
+    return { workers: await db.worker.findMany({ where: { repositoryId }, select: { id: true, name: true, version: true, capabilities: true, lastSeenAt: true, revokedAt: true, createdAt: true }, orderBy: { createdAt: "desc" } }) };
+  }
+
+  @Post("/v1/workers/:workerId/revoke")
+  async revokeWorker(@Req() request: Request, @Param("workerId") workerId: string) {
+    const user = await this.auth.user(request);
+    const worker = await db.worker.findFirst({ where: { id: workerId, repository: { ownerId: user.id } } });
+    if (!worker) throw new NotFoundException("Worker not found");
+    await db.worker.update({ where: { id: workerId }, data: { revokedAt: new Date() } });
+    return { workerId, status: "REVOKED" };
+  }
+
   @Post("/v1/workers/:workerId/heartbeat")
   async heartbeat(@Req() request: Request, @Param("workerId") workerId: string, @Body() body: { version?: string }) {
     const authorization = request.headers.authorization;
