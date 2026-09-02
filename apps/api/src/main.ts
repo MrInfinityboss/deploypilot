@@ -1,3 +1,4 @@
+import "dotenv/config";
 import "reflect-metadata";
 import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoundException, Param, Post, Req, Sse, UnauthorizedException } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";

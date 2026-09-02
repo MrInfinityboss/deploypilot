@@ -34,6 +34,9 @@ importers:
       bullmq:
         specifier: ^5.34.3
         version: 5.81.4
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.6.1
       express:
         specifier: ^5.0.1
         version: 5.2.1
@@ -111,6 +114,9 @@ importers:
       bullmq:
         specifier: ^5.34.3
         version: 5.81.4
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.6.1
       ioredis:
         specifier: ^5.4.1
         version: 5.11.1
