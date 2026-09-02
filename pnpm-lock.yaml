@@ -96,9 +96,15 @@ importers:
 
   apps/worker:
     dependencies:
+      '@deploypilot/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       '@deploypilot/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@prisma/client':
+        specifier: ^6.1.0
+        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
       bullmq:
         specifier: ^5.34.3
         version: 5.81.4
