@@ -2,6 +2,7 @@
   "name": "@deploypilot/database",
   "private": true,
   "type": "module",
+  "exports": { ".": "./client.ts", "./client": "./client.ts" },
   "scripts": { "generate": "prisma generate --schema schema.prisma", "validate": "prisma validate --schema schema.prisma", "test": "vitest run" },
   "dependencies": { "@prisma/client": "^6.1.0" },
   "devDependencies": { "prisma": "^6.1.0", "typescript": "^5.7.2", "vitest": "^2.1.8" }

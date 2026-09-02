@@ -38,12 +38,26 @@ model User {
   displayName String?
   createdAt   DateTime @default(now())
   repositories Repository[]
+  installations GitHubInstallation[]
+}
+
+model GitHubInstallation {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  installationId String   @unique
+  accountLogin   String
+  createdAt      DateTime @default(now())
+  repositories   Repository[]
+  @@index([userId])
 }
 
 model Repository {
   id              String   @id @default(uuid())
   ownerId         String
   owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  installationId  String?
+  installation    GitHubInstallation? @relation(fields: [installationId], references: [id], onDelete: SetNull)
   githubRepoId    String   @unique
   fullName        String
   defaultBranch   String
