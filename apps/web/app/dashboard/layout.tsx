@@ -9,6 +9,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <nav style={{ display: "grid", gap: 8, marginTop: 36 }}>
           <Link href="/dashboard">Overview</Link>
           <Link href="/dashboard/repositories">Repositories</Link>
+          <Link href="/dashboard/deploy">Deploy</Link>
           <Link href="/dashboard/workers">Docker workers</Link>
           <Link href="/dashboard/settings">Settings</Link>
         </nav>

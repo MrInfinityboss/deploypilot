@@ -64,6 +64,32 @@ class AppController {
     return { repositories: await db.repository.findMany({ where: { ownerId: user.id }, orderBy: { fullName: "asc" } }) };
   }
 
+  @Get("/v1/repositories/:repositoryId/setup")
+  async repositorySetup(@Req() request: Request, @Param("repositoryId") repositoryId: string) {
+    const user = await this.auth.user(request);
+    const repository = await db.repository.findFirst({ where: { id: repositoryId, ownerId: user.id }, include: { configs: true, environments: true, workers: { select: { id: true, name: true, version: true, lastSeenAt: true, revokedAt: true } } } });
+    if (!repository) throw new NotFoundException("Repository not found");
+    return repository;
+  }
+
+  @Post("/v1/repositories/:repositoryId/configs")
+  async createConfig(@Req() request: Request, @Param("repositoryId") repositoryId: string, @Body() body: { branchRule?: string; profile?: Record<string, unknown> }) {
+    const user = await this.auth.user(request);
+    const repository = await db.repository.findFirst({ where: { id: repositoryId, ownerId: user.id }, select: { id: true } });
+    if (!repository) throw new NotFoundException("Repository not found");
+    const profile = body.profile ?? { strategy: "DOCKERFILE", timeoutSeconds: 900, requiredSecretNames: [] };
+    return db.deploymentConfig.create({ data: { repositoryId, branchRule: body.branchRule ?? "main", profile: profile as object, version: 1 } });
+  }
+
+  @Post("/v1/repositories/:repositoryId/environments")
+  async createEnvironment(@Req() request: Request, @Param("repositoryId") repositoryId: string, @Body() body: { name?: string; url?: string }) {
+    const user = await this.auth.user(request);
+    if (!body.name) throw new BadRequestException("Environment name is required");
+    const repository = await db.repository.findFirst({ where: { id: repositoryId, ownerId: user.id }, select: { id: true } });
+    if (!repository) throw new NotFoundException("Repository not found");
+    return db.environment.create({ data: { repositoryId, name: body.name, url: body.url, policy: { allowedWorkers: [] } } });
+  }
+
   @Post("/v1/repositories/:repositoryId/deployments")
   async createDeployment(@Req() request: Request, @Param("repositoryId") repositoryId: string, @Body() body: { branch?: string; sha?: string; configId: string; environmentId: string; workerId: string }) {
     const user = await this.auth.user(request);
