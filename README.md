@@ -8,6 +8,8 @@ The Next.js web application is designed for Vercel. The API owns authentication,
 
 The code is intentionally portable. Production credentials, domains, hosting accounts, and billing remain under the owner's control and are never committed to this repository.
 
+For local development, the GitHub App private key can be loaded from a file without pasting its contents into `.env`. Set `GITHUB_PRIVATE_KEY_PATH` to the absolute path of the downloaded `.pem` file. Use `GITHUB_PRIVATE_KEY` instead only when deploying to a secret manager that cannot mount a file.
+
 ## Repository layout
 
 | Path | Responsibility |

@@ -1,5 +1,6 @@
 import { Injectable, InternalServerErrorException } from "@nestjs/common";
 import { createAppAuth } from "@octokit/auth-app";
+import { readFileSync } from "node:fs";
 
 export type GitHubRepository = {
   id: number;
@@ -12,7 +13,7 @@ export type GitHubRepository = {
 @Injectable()
 export class GitHubService {
   private readonly appId = process.env.GITHUB_APP_ID;
-  private readonly privateKey = process.env.GITHUB_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  private readonly privateKey = process.env.GITHUB_PRIVATE_KEY?.replace(/\\n/g, "\n") ?? (process.env.GITHUB_PRIVATE_KEY_PATH ? readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH, "utf8") : undefined);
 
   private async token(installationId: string) {
     if (!this.appId || !this.privateKey) throw new InternalServerErrorException("GitHub App is not configured");
