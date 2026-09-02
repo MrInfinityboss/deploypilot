@@ -31,29 +31,7 @@ class AuthService {
 class AppController {
   constructor(private readonly auth: AuthService, private readonly github: GitHubService, private readonly prisma: PrismaService, private readonly queue: QueueService, private readonly diagnosis: DiagnosisService) {}
 
-  @Get("/health")
-  health() { return { service: "deploypilot-api", status: "ok", timestamp: new Date().toISOString() }; }
-
-  @Post("/webhooks/github")
-  async githubWebhook(@Req() request: Request, @Body() payload: PushPayload) {
-    const rawBody = (request as Request & { rawBody?: Buffer }).rawBody;
-    if (!rawBody || !verifyGitHubSignature(rawBody, request.headers["x-hub-signature-256"] as string | undefined, process.env.GITHUB_WEBHOOK_SECRET)) throw new UnauthorizedException("Invalid GitHub webhook signature");
-    const deliveryId = request.headers["x-github-delivery"] as string | undefined;
-    if (!deliveryId || !payload.repository?.id || !payload.after) throw new BadRequestException("Invalid GitHub push payload");
-    const existing = await db.webhookDelivery.findUnique({ where: { deliveryId } });
-    if (existing) return { accepted: true, duplicate: true };
-    await db.webhookDelivery.create({ data: { deliveryId, event: "push" } });
-    const branch = branchFromRef(payload.ref);
-    const repository = await db.repository.findFirst({ where: { githubRepoId: String(payload.repository.id) }, include: { configs: true, environments: true, workers: true } });
-    const config = repository?.configs.find((item) => !branch || item.branchRule === branch || item.branchRule === "*");
-    const environment = repository?.environments[0];
-    const worker = repository?.workers.find((item) => !item.revokedAt);
-    if (!repository || !config || !environment || !worker) return { accepted: true, ignored: true, reason: "Repository has no complete deployment configuration" };
-    const deployment = await db.deployment.create({ data: { repositoryId: repository.id, configId: config.id, environmentId: environment.id, targetWorkerId: worker.id, commitSha: payload.after, trigger: DeploymentTrigger.PUSH, stages: { create: ["dependencies", "tests", "docker-build", "health-check", "deploy"].map((name) => ({ name })) } } });
-    await this.queue.enqueue(deployment.id);
-    await db.webhookDelivery.update({ where: { deliveryId }, data: { processedAt: new Date(), outcome: "deployment-created" } });
-    return { accepted: true, deploymentId: deployment.id };
-  }
+  @Get("/health") health() { return { service: "deploypilot-api", status: "ok", timestamp: new Date().toISOString() }; }
 
   @Get("/v1/github/installations/:installationId/repositories")
   async repositories(@Req() request: Request, @Param("installationId") installationId: string) {
@@ -102,6 +80,14 @@ class AppController {
     const deployment = await db.deployment.create({ data: { repositoryId, configId: config.id, environmentId: environment.id, targetWorkerId: body.workerId, commitSha: body.sha ?? body.branch!, trigger: DeploymentTrigger.MANUAL, stages: { create: ["dependencies", "tests", "docker-build", "health-check", "deploy"].map((name) => ({ name })) } } });
     await this.queue.enqueue(deployment.id);
     return { id: deployment.id, status: deployment.status, commitSha: deployment.commitSha };
+  }
+
+  @Get("/v1/repositories/:repositoryId/deployments")
+  async deploymentHistory(@Req() request: Request, @Param("repositoryId") repositoryId: string) {
+    const user = await this.auth.user(request);
+    const repository = await db.repository.findFirst({ where: { id: repositoryId, ownerId: user.id }, select: { id: true } });
+    if (!repository) throw new NotFoundException("Repository not found");
+    return { deployments: await db.deployment.findMany({ where: { repositoryId }, orderBy: { createdAt: "desc" }, take: 50, select: { id: true, commitSha: true, status: true, trigger: true, createdAt: true, startedAt: true, endedAt: true, targetWorkerId: true, environment: { select: { name: true, url: true } } } }) };
   }
 
   @Get("/v1/deployments/:deploymentId")
@@ -172,7 +158,7 @@ class AppController {
     return new Observable<{ id: string; type: string; data: unknown }>((subscriber) => {
       let closed = false;
       const emit = async () => {
-        const deployment = await db.deployment.findFirst({ where: { id: deploymentId }, select: { id: true, status: true, endedAt: true, repository: { select: { ownerId: true } } } });
+        const deployment = await db.deployment.findFirst({ where: { id: deploymentId }, select: { id: true, status: true, endedAt: true } });
         if (!deployment) return;
         const events = await db.deploymentEvent.findMany({ where: { deploymentId, createdAt: { gt: lastEventAt } }, orderBy: { createdAt: "asc" }, take: 100 });
         for (const event of events) subscriber.next({ id: String(event.createdAt.getTime()), type: event.type, data: event.payload });
@@ -182,6 +168,27 @@ class AppController {
       const timer = setInterval(() => { if (!closed) void emit(); }, 1000);
       return () => { closed = true; clearInterval(timer); };
     });
+  }
+
+  @Post("/webhooks/github")
+  async githubWebhook(@Req() request: Request, @Body() payload: PushPayload) {
+    const rawBody = (request as Request & { rawBody?: Buffer }).rawBody;
+    if (!rawBody || !verifyGitHubSignature(rawBody, request.headers["x-hub-signature-256"] as string | undefined, process.env.GITHUB_WEBHOOK_SECRET)) throw new UnauthorizedException("Invalid GitHub webhook signature");
+    const deliveryId = request.headers["x-github-delivery"] as string | undefined;
+    if (!deliveryId || !payload.repository?.id || !payload.after) throw new BadRequestException("Invalid GitHub push payload");
+    const existing = await db.webhookDelivery.findUnique({ where: { deliveryId } });
+    if (existing) return { accepted: true, duplicate: true };
+    await db.webhookDelivery.create({ data: { deliveryId, event: "push" } });
+    const branch = branchFromRef(payload.ref);
+    const repository = await db.repository.findFirst({ where: { githubRepoId: String(payload.repository.id) }, include: { configs: true, environments: true, workers: true } });
+    const config = repository?.configs.find((item) => !branch || item.branchRule === branch || item.branchRule === "*");
+    const environment = repository?.environments[0];
+    const worker = repository?.workers.find((item) => !item.revokedAt);
+    if (!repository || !config || !environment || !worker) return { accepted: true, ignored: true, reason: "Repository has no complete deployment configuration" };
+    const deployment = await db.deployment.create({ data: { repositoryId: repository.id, configId: config.id, environmentId: environment.id, targetWorkerId: worker.id, commitSha: payload.after, trigger: DeploymentTrigger.PUSH, stages: { create: ["dependencies", "tests", "docker-build", "health-check", "deploy"].map((name) => ({ name })) } } });
+    await this.queue.enqueue(deployment.id);
+    await db.webhookDelivery.update({ where: { deliveryId }, data: { processedAt: new Date(), outcome: "deployment-created" } });
+    return { accepted: true, deploymentId: deployment.id };
   }
 
   @Post("/v1/repositories/:repositoryId/workers/register")

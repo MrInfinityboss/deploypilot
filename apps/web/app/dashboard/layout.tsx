@@ -10,6 +10,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <Link href="/dashboard">Overview</Link>
           <Link href="/dashboard/repositories">Repositories</Link>
           <Link href="/dashboard/deploy">Deploy</Link>
+          <Link href="/dashboard/deployments">Deployment history</Link>
           <Link href="/dashboard/workers">Docker workers</Link>
           <Link href="/dashboard/settings">Settings</Link>
         </nav>
