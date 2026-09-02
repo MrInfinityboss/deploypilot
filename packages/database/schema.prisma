@@ -8,11 +8,28 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-enum DeploymentStatus { QUEUED RUNNING SUCCEEDED FAILED CANCELLED TIMED_OUT }
-en
-enum DeploymentTrigger { MANUAL PUSH RETRY }
+enum DeploymentStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  TIMED_OUT
+}
 
-enum StageStatus { PENDING RUNNING SUCCEEDED FAILED SKIPPED }
+enum DeploymentTrigger {
+  MANUAL
+  PUSH
+  RETRY
+}
+
+enum StageStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+}
 
 model User {
   id          String   @id @default(uuid())
