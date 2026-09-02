@@ -1,20 +1,11 @@
+import Link from "next/link";
+
+const cards = [
+  { title: "GitHub push deployments", text: "Connect repositories, choose a branch, and create immutable deployment runs.", href: "/dashboard/repositories", action: "Connect repository" },
+  { title: "Remote Docker workers", text: "Register computers you control and run bounded Docker jobs with revocable tokens.", href: "/dashboard/workers", action: "Manage workers" },
+  { title: "Live observability", text: "Follow stage progress, logs, retries, cancellations, and evidence-based diagnosis.", href: "/dashboard/deployments", action: "View deployments" },
+];
+
 export default function Home() {
-  return (
-    <main style={{ fontFamily: "system-ui", maxWidth: 960, margin: "0 auto", padding: 48 }}>
-      <p style={{ color: "#64748b", letterSpacing: ".08em", textTransform: "uppercase" }}>DeployPilot</p>
-      <h1 style={{ fontSize: 48, marginBottom: 16 }}>From GitHub push to healthy container.</h1>
-      <p style={{ fontSize: 20, color: "#475569", maxWidth: 700 }}>
-        A controlled deployment platform for connecting GitHub repositories, managing Docker workers,
-        and operating live services with durable logs and evidence-based diagnosis.
-      </p>
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginTop: 40 }}>
-        {["GitHub push deployments", "Remote Docker workers", "Live observability"].map((title) => (
-          <article key={title} style={{ border: "1px solid #e2e8f0", borderRadius: 12, padding: 20 }}>
-            <h2 style={{ fontSize: 18 }}>{title}</h2>
-            <p style={{ color: "#64748b" }}>Foundation ready for the next implementation milestone.</p>
-          </article>
-        ))}
-      </section>
-    </main>
-  );
+  return <main style={{ minHeight: "100vh", background: "#f8fafc", color: "#0f172a", fontFamily: "system-ui" }}><header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 7vw", borderBottom: "1px solid #e2e8f0", background: "white" }}><strong style={{ fontSize: 22 }}>DeployPilot</strong><nav style={{ display: "flex", gap: 18, alignItems: "center" }}><Link href="/dashboard">Dashboard</Link><Link href="/login" style={{ background: "#0f172a", color: "white", padding: "10px 16px", borderRadius: 8, textDecoration: "none" }}>Sign in with GitHub</Link></nav></header><section style={{ padding: "88px 7vw 48px", maxWidth: 900 }}><p style={{ color: "#2563eb", fontWeight: 700, letterSpacing: 1 }}>PRIVATE DEPLOYMENT CONTROL PLANE</p><h1 style={{ fontSize: "clamp(42px, 7vw, 76px)", lineHeight: 1.02, margin: "16px 0" }}>From GitHub push<br />to healthy container.</h1><p style={{ color: "#475569", fontSize: 20, lineHeight: 1.6, maxWidth: 700 }}>Connect repositories, manage Docker workers, and operate live services with durable logs and evidence-based diagnosis.</p><div style={{ display: "flex", gap: 12, marginTop: 28, flexWrap: "wrap" }}><Link href="/login" style={{ background: "#2563eb", color: "white", padding: "13px 20px", borderRadius: 8, textDecoration: "none", fontWeight: 700 }}>Get started with GitHub</Link><Link href="/dashboard" style={{ border: "1px solid #cbd5e1", color: "#0f172a", padding: "13px 20px", borderRadius: 8, textDecoration: "none" }}>Open dashboard</Link></div></section><section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 16, padding: "24px 7vw 80px" }}>{cards.map((card) => <article key={card.title} style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 14, padding: 24 }}><div style={{ width: 10, height: 10, background: "#22c55e", borderRadius: "50%", marginBottom: 20 }} /><h2 style={{ fontSize: 20 }}>{card.title}</h2><p style={{ color: "#64748b", lineHeight: 1.5, minHeight: 70 }}>{card.text}</p><Link href={card.href} style={{ color: "#2563eb", fontWeight: 700 }}>{card.action} →</Link></article>)}</section></main>;
 }
