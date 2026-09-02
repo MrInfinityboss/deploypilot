@@ -1,10 +1,11 @@
 import "reflect-metadata";
-import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoundException, Param, Post, Req, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoundException, Param, Post, Req, Sse, UnauthorizedException } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { createClient } from "@supabase/supabase-js";
 import type { Request } from "express";
+import { Observable } from "rxjs";
 import { db } from "@deploypilot/database/client";
-import { DeploymentTrigger } from "@prisma/client";
+import { DeploymentStatus, DeploymentTrigger } from "@prisma/client";
 import { GitHubService } from "./github.service.js";
 import { PrismaService } from "./prisma.service.js";
 import { QueueService } from "./queue.service.js";
@@ -35,9 +36,7 @@ class AppController {
     const user = await this.auth.user(request);
     const githubRepositories = await this.github.listRepositories(installationId);
     const installation = await db.gitHubInstallation.upsert({ where: { installationId }, update: { accountLogin: githubRepositories[0]?.full_name.split("/")[0] ?? "unknown" }, create: { userId: user.id, installationId, accountLogin: githubRepositories[0]?.full_name.split("/")[0] ?? "unknown" } });
-    for (const repo of githubRepositories) {
-      await db.repository.upsert({ where: { githubRepoId: String(repo.id) }, update: { fullName: repo.full_name, defaultBranch: repo.default_branch, ownerId: user.id, installationId: installation.id }, create: { githubRepoId: String(repo.id), fullName: repo.full_name, defaultBranch: repo.default_branch, ownerId: user.id, installationId: installation.id } });
-    }
+    for (const repo of githubRepositories) await db.repository.upsert({ where: { githubRepoId: String(repo.id) }, update: { fullName: repo.full_name, defaultBranch: repo.default_branch, ownerId: user.id, installationId: installation.id }, create: { githubRepoId: String(repo.id), fullName: repo.full_name, defaultBranch: repo.default_branch, ownerId: user.id, installationId: installation.id } });
     return { repositories: await db.repository.findMany({ where: { ownerId: user.id }, orderBy: { fullName: "asc" } }) };
   }
 
@@ -50,10 +49,67 @@ class AppController {
     const config = repository.configs.find((item) => item.id === body.configId);
     const environment = repository.environments.find((item) => item.id === body.environmentId);
     if (!config || !environment) throw new BadRequestException("Configuration or environment does not belong to repository");
-    const commitSha = body.sha ?? body.branch!;
-    const deployment = await db.deployment.create({ data: { repositoryId, configId: config.id, environmentId: environment.id, targetWorkerId: body.workerId, commitSha, trigger: DeploymentTrigger.MANUAL, stages: { create: ["dependencies", "tests", "docker-build", "health-check", "deploy"].map((name) => ({ name })) } } });
+    const deployment = await db.deployment.create({ data: { repositoryId, configId: config.id, environmentId: environment.id, targetWorkerId: body.workerId, commitSha: body.sha ?? body.branch!, trigger: DeploymentTrigger.MANUAL, stages: { create: ["dependencies", "tests", "docker-build", "health-check", "deploy"].map((name) => ({ name })) } } });
     await this.queue.enqueue(deployment.id);
     return { id: deployment.id, status: deployment.status, commitSha: deployment.commitSha };
+  }
+
+  @Get("/v1/deployments/:deploymentId")
+  async deployment(@Req() request: Request, @Param("deploymentId") deploymentId: string) {
+    const user = await this.auth.user(request);
+    const result = await db.deployment.findFirst({ where: { id: deploymentId, repository: { ownerId: user.id } }, include: { stages: true, repository: true, config: true, environment: true } });
+    if (!result) throw new NotFoundException("Deployment not found");
+    return result;
+  }
+
+  @Get("/v1/deployments/latest")
+  async latestDeployment(@Req() request: Request) {
+    const user = await this.auth.user(request);
+    const result = await db.deployment.findFirst({ where: { repository: { ownerId: user.id } }, orderBy: { createdAt: "desc" }, select: { id: true, status: true, commitSha: true, createdAt: true } });
+    if (!result) throw new NotFoundException("No deployment found");
+    return result;
+  }
+
+  @Get("/v1/deployments/:deploymentId/logs")
+  async logs(@Req() request: Request, @Param("deploymentId") deploymentId: string) {
+    const user = await this.auth.user(request);
+    const cursor = Number(request.query.cursor ?? 0);
+    const limit = Math.min(Number(request.query.limit ?? 200), 500);
+    const deployment = await db.deployment.findFirst({ where: { id: deploymentId, repository: { ownerId: user.id } }, select: { id: true } });
+    if (!deployment) throw new NotFoundException("Deployment not found");
+    const logs = await db.deploymentLog.findMany({ where: { deploymentId, sequence: { gt: cursor } }, orderBy: { sequence: "asc" }, take: limit });
+    return { logs, nextCursor: logs.at(-1)?.sequence ?? cursor, hasMore: logs.length === limit };
+  }
+
+  @Post("/v1/deployments/:deploymentId/cancel")
+  async cancel(@Req() request: Request, @Param("deploymentId") deploymentId: string) {
+    const user = await this.auth.user(request);
+    const result = await db.deployment.updateMany({ where: { id: deploymentId, status: { in: [DeploymentStatus.QUEUED, DeploymentStatus.RUNNING] }, repository: { ownerId: user.id } }, data: { status: DeploymentStatus.CANCELLED, endedAt: new Date() } });
+    if (result.count !== 1) throw new NotFoundException("Active deployment not found");
+    return { id: deploymentId, status: DeploymentStatus.CANCELLED };
+  }
+
+  @Sse("/v1/deployments/:deploymentId/events")
+  async events(@Req() request: Request, @Param("deploymentId") deploymentId: string) {
+    const accessToken = typeof request.query.access_token === "string" ? request.query.access_token : undefined;
+    const authRequest = accessToken ? { ...request, headers: { ...request.headers, authorization: `Bearer ${accessToken}` } } as Request : request;
+    const user = await this.auth.user(authRequest);
+    const authorized = await db.deployment.findFirst({ where: { id: deploymentId, repository: { ownerId: user.id } }, select: { id: true } });
+    if (!authorized) throw new NotFoundException("Deployment not found");
+    const lastEventAt = request.headers["last-event-id"] ? new Date(Number(request.headers["last-event-id"])) : new Date(0);
+    return new Observable<{ id: string; type: string; data: unknown }>((subscriber) => {
+      let closed = false;
+      const emit = async () => {
+        const deployment = await db.deployment.findFirst({ where: { id: deploymentId }, select: { id: true, status: true, endedAt: true, repository: { select: { ownerId: true } } } });
+        if (!deployment) return;
+        const events = await db.deploymentEvent.findMany({ where: { deploymentId, createdAt: { gt: lastEventAt } }, orderBy: { createdAt: "asc" }, take: 100 });
+        for (const event of events) subscriber.next({ id: String(event.createdAt.getTime()), type: event.type, data: event.payload });
+        if (deployment.status !== DeploymentStatus.QUEUED && deployment.status !== DeploymentStatus.RUNNING) subscriber.next({ id: String(Date.now()), type: "deployment.completed", data: { deploymentId, status: deployment.status, endedAt: deployment.endedAt } });
+      };
+      void emit();
+      const timer = setInterval(() => { if (!closed) void emit(); }, 1000);
+      return () => { closed = true; clearInterval(timer); };
+    });
   }
 
   @Post("/v1/repositories/:repositoryId/workers/register")
