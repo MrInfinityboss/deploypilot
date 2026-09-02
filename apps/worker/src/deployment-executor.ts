@@ -14,6 +14,8 @@ export class DeploymentExecutor {
       const deployment = await db.deployment.findUniqueOrThrow({ where: { id: deploymentId }, include: { config: true, repository: true } });
       await this.log(deploymentId, "system", "info", `Claimed commit ${deployment.commitSha}`);
       for (const name of stageNames) {
+        const current = await db.deployment.findUnique({ where: { id: deploymentId }, select: { status: true } });
+        if (current?.status === DeploymentStatus.CANCELLED) return { status: DeploymentStatus.CANCELLED };
         await db.deploymentStage.update({ where: { deploymentId_name: { deploymentId, name } }, data: { status: StageStatus.RUNNING, startedAt: new Date() } });
         await this.log(deploymentId, name, "info", `Starting ${name}`);
         if (name === "docker-build") {
@@ -23,7 +25,9 @@ export class DeploymentExecutor {
         await db.deploymentStage.update({ where: { deploymentId_name: { deploymentId, name } }, data: { status: StageStatus.SUCCEEDED, endedAt: new Date() } });
         await this.log(deploymentId, name, "info", `Completed ${name}`);
       }
-      await db.deployment.update({ where: { id: deploymentId }, data: { status: DeploymentStatus.SUCCEEDED, endedAt: new Date() } });
+      const current = await db.deployment.findUnique({ where: { id: deploymentId }, select: { status: true } });
+      if (current?.status === DeploymentStatus.CANCELLED) return { status: DeploymentStatus.CANCELLED };
+      await db.deployment.update({ where: { id: deploymentId, status: DeploymentStatus.RUNNING }, data: { status: DeploymentStatus.SUCCEEDED, endedAt: new Date() } });
       await this.log(deploymentId, "system", "info", "Deployment succeeded");
       return { status: DeploymentStatus.SUCCEEDED };
     } catch (error) {

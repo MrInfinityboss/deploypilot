@@ -112,6 +112,20 @@ class AppController {
     return { id: deploymentId, status: DeploymentStatus.CANCELLED };
   }
 
+  @Post("/v1/deployments/:deploymentId/retry")
+  async retry(@Req() request: Request, @Param("deploymentId") deploymentId: string) {
+    const user = await this.auth.user(request);
+    const previous = await db.deployment.findFirst({ where: { id: deploymentId, status: DeploymentStatus.FAILED, repository: { ownerId: user.id } }, include: { repository: { include: { configs: true, environments: true, workers: true } } } });
+    if (!previous) throw new NotFoundException("Failed deployment not found");
+    const config = previous.repository.configs.find((item) => item.id === previous.configId);
+    const environment = previous.repository.environments.find((item) => item.id === previous.environmentId);
+    const worker = previous.repository.workers.find((item) => item.id === previous.targetWorkerId && !item.revokedAt);
+    if (!config || !environment || !worker) throw new BadRequestException("Deployment target is no longer available");
+    const deployment = await db.deployment.create({ data: { repositoryId: previous.repositoryId, configId: config.id, environmentId: environment.id, targetWorkerId: worker.id, commitSha: previous.commitSha, trigger: DeploymentTrigger.RETRY, stages: { create: ["dependencies", "tests", "docker-build", "health-check", "deploy"].map((name) => ({ name })) } } });
+    await this.queue.enqueue(deployment.id);
+    return { id: deployment.id, status: deployment.status, commitSha: deployment.commitSha, retriedFrom: deploymentId };
+  }
+
   @Sse("/v1/deployments/:deploymentId/events")
   async events(@Req() request: Request, @Param("deploymentId") deploymentId: string) {
     const accessToken = typeof request.query.access_token === "string" ? request.query.access_token : undefined;

@@ -41,4 +41,14 @@ export class GitHubService {
     const body = await response.json() as { sha: string };
     return body.sha;
   }
+
+  async setCommitStatus(installationId: string, fullName: string, sha: string, state: "pending" | "success" | "failure" | "error", description: string, targetUrl?: string) {
+    const token = await this.token(installationId);
+    const response = await fetch(`https://api.github.com/repos/${fullName}/statuses/${sha}`, {
+      method: "POST",
+      headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`, "Content-Type": "application/json", "X-GitHub-Api-Version": "2022-11-28" },
+      body: JSON.stringify({ state, context: "DeployPilot", description: description.slice(0, 140), target_url: targetUrl }),
+    });
+    if (!response.ok) throw new InternalServerErrorException("Unable to publish GitHub commit status");
+  }
 }
