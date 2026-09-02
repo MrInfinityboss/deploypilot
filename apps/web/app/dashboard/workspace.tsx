@@ -1,0 +1,7 @@
+"use client";
+import { createContext,useContext,useEffect,useState } from "react"; import { apiRequest } from "../../lib/api";
+export type WorkspaceRepo={id:string;fullName:string;defaultBranch:string;githubRepoId?:string};
+const WorkspaceContext=createContext<{repositories:WorkspaceRepo[];loading:boolean;refresh:()=>Promise<void>}>({repositories:[],loading:true,refresh:async()=>{}});
+export function WorkspaceProvider({children}:{children:React.ReactNode}){const [repositories,setRepositories]=useState<WorkspaceRepo[]>([]);const [loading,setLoading]=useState(true);const refresh=async()=>{try{const r=await apiRequest<{repositories:WorkspaceRepo[]}>('/v1/repositories');setRepositories(r.repositories);localStorage.setItem('dp_repos',JSON.stringify(r.repositories))}catch{setRepositories([])}finally{setLoading(false)}};useEffect(()=>{void refresh()},[]);return <WorkspaceContext.Provider value={{repositories,loading,refresh}}>{children}</WorkspaceContext.Provider>}
+export function useWorkspace(){return useContext(WorkspaceContext)}
+export function RepositoryPicker({value,onChange}:{value:string;onChange:(value:string)=>void}){const {repositories,loading}=useWorkspace();return <select className="dp-select" value={value} onChange={e=>onChange(e.target.value)}><option value="">{loading?'Loading repositories…':'Select a synced repository'}</option>{repositories.map(repo=><option key={repo.id} value={repo.id}>{repo.fullName}</option>)}</select>}

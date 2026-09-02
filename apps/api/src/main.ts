@@ -35,6 +35,12 @@ class AppController {
 
   @Get("/health") health() { return { service: "deploypilot-api", status: "ok", timestamp: new Date().toISOString() }; }
 
+  @Get("/v1/repositories")
+  async allRepositories(@Req() request: Request) {
+    const user = await this.auth.user(request);
+    return { repositories: await db.repository.findMany({ where: { ownerId: user.id }, orderBy: { fullName: "asc" } }) };
+  }
+
   @Get("/v1/github/installations/:installationId/repositories")
   async repositories(@Req() request: Request, @Param("installationId") installationId: string) {
     const user = await this.auth.user(request);
