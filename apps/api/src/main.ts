@@ -3,6 +3,7 @@ import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoun
 import { NestFactory } from "@nestjs/core";
 import { createClient } from "@supabase/supabase-js";
 import type { Request } from "express";
+import { json } from "express";
 import { Observable } from "rxjs";
 import { db } from "@deploypilot/database/client";
 import { DeploymentStatus, DeploymentTrigger } from "@prisma/client";
@@ -10,6 +11,7 @@ import { GitHubService } from "./github.service.js";
 import { PrismaService } from "./prisma.service.js";
 import { QueueService } from "./queue.service.js";
 import { createWorkerToken, hashWorkerToken, workerTokenMatches } from "./worker-auth.js";
+import { branchFromRef, verifyGitHubSignature, type PushPayload } from "./github-webhook.js";
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "");
 
@@ -30,6 +32,27 @@ class AppController {
 
   @Get("/health")
   health() { return { service: "deploypilot-api", status: "ok", timestamp: new Date().toISOString() }; }
+
+  @Post("/webhooks/github")
+  async githubWebhook(@Req() request: Request, @Body() payload: PushPayload) {
+    const rawBody = (request as Request & { rawBody?: Buffer }).rawBody;
+    if (!rawBody || !verifyGitHubSignature(rawBody, request.headers["x-hub-signature-256"] as string | undefined, process.env.GITHUB_WEBHOOK_SECRET)) throw new UnauthorizedException("Invalid GitHub webhook signature");
+    const deliveryId = request.headers["x-github-delivery"] as string | undefined;
+    if (!deliveryId || !payload.repository?.id || !payload.after) throw new BadRequestException("Invalid GitHub push payload");
+    const existing = await db.webhookDelivery.findUnique({ where: { deliveryId } });
+    if (existing) return { accepted: true, duplicate: true };
+    await db.webhookDelivery.create({ data: { deliveryId, event: "push" } });
+    const branch = branchFromRef(payload.ref);
+    const repository = await db.repository.findFirst({ where: { githubRepoId: String(payload.repository.id) }, include: { configs: true, environments: true, workers: true } });
+    const config = repository?.configs.find((item) => !branch || item.branchRule === branch || item.branchRule === "*");
+    const environment = repository?.environments[0];
+    const worker = repository?.workers.find((item) => !item.revokedAt);
+    if (!repository || !config || !environment || !worker) return { accepted: true, ignored: true, reason: "Repository has no complete deployment configuration" };
+    const deployment = await db.deployment.create({ data: { repositoryId: repository.id, configId: config.id, environmentId: environment.id, targetWorkerId: worker.id, commitSha: payload.after, trigger: DeploymentTrigger.PUSH, stages: { create: ["dependencies", "tests", "docker-build", "health-check", "deploy"].map((name) => ({ name })) } } });
+    await this.queue.enqueue(deployment.id);
+    await db.webhookDelivery.update({ where: { deliveryId }, data: { processedAt: new Date(), outcome: "deployment-created" } });
+    return { accepted: true, deploymentId: deployment.id };
+  }
 
   @Get("/v1/github/installations/:installationId/repositories")
   async repositories(@Req() request: Request, @Param("installationId") installationId: string) {
@@ -138,5 +161,6 @@ class AppController {
 class AppModule {}
 
 const app = await NestFactory.create(AppModule);
+app.use(json({ verify: (request, _response, buffer) => { (request as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer); } }));
 app.enableCors({ origin: true, credentials: true });
 await app.listen(Number(process.env.API_PORT ?? 4000), "0.0.0.0");
