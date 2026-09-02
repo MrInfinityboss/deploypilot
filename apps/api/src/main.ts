@@ -12,6 +12,7 @@ import { PrismaService } from "./prisma.service.js";
 import { QueueService } from "./queue.service.js";
 import { createWorkerToken, hashWorkerToken, workerTokenMatches } from "./worker-auth.js";
 import { branchFromRef, verifyGitHubSignature, type PushPayload } from "./github-webhook.js";
+import { DiagnosisService } from "./diagnosis.service.js";
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "");
 
@@ -28,7 +29,7 @@ class AuthService {
 
 @Controller()
 class AppController {
-  constructor(private readonly auth: AuthService, private readonly github: GitHubService, private readonly prisma: PrismaService, private readonly queue: QueueService) {}
+  constructor(private readonly auth: AuthService, private readonly github: GitHubService, private readonly prisma: PrismaService, private readonly queue: QueueService, private readonly diagnosis: DiagnosisService) {}
 
   @Get("/health")
   health() { return { service: "deploypilot-api", status: "ok", timestamp: new Date().toISOString() }; }
@@ -126,6 +127,14 @@ class AppController {
     return { id: deployment.id, status: deployment.status, commitSha: deployment.commitSha, retriedFrom: deploymentId };
   }
 
+  @Post("/v1/deployments/:deploymentId/diagnose")
+  async diagnose(@Req() request: Request, @Param("deploymentId") deploymentId: string) {
+    const user = await this.auth.user(request);
+    const deployment = await db.deployment.findFirst({ where: { id: deploymentId, repository: { ownerId: user.id }, status: DeploymentStatus.FAILED }, select: { id: true } });
+    if (!deployment) throw new NotFoundException("Failed deployment not found");
+    return this.diagnosis.diagnose(deploymentId);
+  }
+
   @Sse("/v1/deployments/:deploymentId/events")
   async events(@Req() request: Request, @Param("deploymentId") deploymentId: string) {
     const accessToken = typeof request.query.access_token === "string" ? request.query.access_token : undefined;
@@ -171,7 +180,7 @@ class AppController {
   }
 }
 
-@Module({ controllers: [AppController], providers: [AuthService, GitHubService, PrismaService, QueueService] })
+@Module({ controllers: [AppController], providers: [AuthService, GitHubService, PrismaService, QueueService, DiagnosisService] })
 class AppModule {}
 
 const app = await NestFactory.create(AppModule);
