@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum DeploymentStatus { QUEUED RUNNING SUCCEEDED FAILED CANCELLED TIMED_OUT }
+en
+enum DeploymentTrigger { MANUAL PUSH RETRY }
+
+enum StageStatus { PENDING RUNNING SUCCEEDED FAILED SKIPPED }
+
+model User {
+  id          String   @id @default(uuid())
+  supabaseId  String   @unique
+  email       String   @unique
+  displayName String?
+  createdAt   DateTime @default(now())
+  repositories Repository[]
+}
+
+model Repository {
+  id              String   @id @default(uuid())
+  ownerId         String
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  githubRepoId    String   @unique
+  fullName        String
+  defaultBranch   String
+  createdAt       DateTime @default(now())
+  environments    Environment[]
+  configs         DeploymentConfig[]
+  deployments     Deployment[]
+  workers         Worker[]
+  @@index([ownerId])
+}
+
+model Environment {
+  id           String   @id @default(uuid())
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  name         String
+  url          String?
+  policy       Json
+  secrets      EnvironmentSecret[]
+  @@unique([repositoryId, name])
+}
+
+model DeploymentConfig {
+  id           String   @id @default(uuid())
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  branchRule   String
+  profile      Json
+  version      Int      @default(1)
+  createdAt    DateTime @default(now())
+  deployments  Deployment[]
+}
+
+model Deployment {
+  id             String   @id @default(uuid())
+  repositoryId   String
+  repository     Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  configId       String
+  config         DeploymentConfig @relation(fields: [configId], references: [id])
+  commitSha      String
+  trigger        DeploymentTrigger
+  status         DeploymentStatus @default(QUEUED)
+  targetWorkerId String?
+  environmentId  String?
+  startedAt      DateTime?
+  endedAt        DateTime?
+  createdAt      DateTime @default(now())
+  stages         DeploymentStage[]
+  logs           DeploymentLog[]
+  events         DeploymentEvent[]
+  diagnosis     AIDiagnosis?
+  @@index([repositoryId, createdAt])
+}
+
+model DeploymentStage {
+  id           String @id @default(uuid())
+  deploymentId String
+  deployment   Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  name         String
+  status       StageStatus @default(PENDING)
+  startedAt    DateTime?
+  endedAt      DateTime?
+  @@unique([deploymentId, name])
+}
+
+model DeploymentLog {
+  id           String @id @default(uuid())
+  deploymentId String
+  deployment   Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  sequence     Int
+  stage        String
+  level        String
+  message      String
+  createdAt    DateTime @default(now())
+  @@unique([deploymentId, sequence])
+  @@index([deploymentId, sequence])
+}
+
+model DeploymentEvent {
+  id           String @id @default(uuid())
+  deploymentId String
+  deployment   Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  type         String
+  payload      Json
+  createdAt    DateTime @default(now())
+  @@index([deploymentId, createdAt])
+}
+
+model EnvironmentSecret {
+  id            String @id @default(uuid())
+  environmentId String
+  environment   Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+  name          String
+  ciphertext    String
+  keyVersion    Int
+  @@unique([environmentId, name])
+}
+
+model Worker {
+  id           String @id @default(uuid())
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  name         String
+  tokenHash    String   @unique
+  version      String
+  capabilities Json
+  lastSeenAt   DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime @default(now())
+}
+
+model WebhookDelivery {
+  deliveryId String @id
+  event      String
+  receivedAt DateTime @default(now())
+  processedAt DateTime?
+  outcome    String?
+}
+
+model AIDiagnosis {
+  id           String @id @default(uuid())
+  deploymentId String @unique
+  deployment   Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  model        String
+  inputHash    String
+  response     Json
+  createdAt    DateTime @default(now())
+}
