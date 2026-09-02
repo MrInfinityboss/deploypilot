@@ -31,7 +31,7 @@ class AuthService {
 
 @Controller()
 class AppController {
-  constructor(@Inject(AuthService) private readonly auth: AuthService, private readonly github: GitHubService, private readonly prisma: PrismaService, private readonly queue: QueueService, private readonly diagnosis: DiagnosisService) {}
+  constructor(@Inject(AuthService) private readonly auth: AuthService, @Inject(GitHubService) private readonly github: GitHubService, @Inject(PrismaService) private readonly prisma: PrismaService, @Inject(QueueService) private readonly queue: QueueService, @Inject(DiagnosisService) private readonly diagnosis: DiagnosisService) {}
 
   @Get("/health") health() { return { service: "deploypilot-api", status: "ok", timestamp: new Date().toISOString() }; }
 
