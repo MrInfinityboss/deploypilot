@@ -12,26 +12,33 @@ export class DeploymentExecutor {
     if (claimed.count !== 1) return { skipped: true };
     try {
       const deployment = await db.deployment.findUniqueOrThrow({ where: { id: deploymentId }, include: { config: true, repository: true } });
+      await this.event(deploymentId, "deployment.status", { deploymentId, status: DeploymentStatus.RUNNING });
       await this.log(deploymentId, "system", "info", `Claimed commit ${deployment.commitSha}`);
       for (const name of stageNames) {
         const current = await db.deployment.findUnique({ where: { id: deploymentId }, select: { status: true } });
         if (current?.status === DeploymentStatus.CANCELLED) return { status: DeploymentStatus.CANCELLED };
-        await db.deploymentStage.update({ where: { deploymentId_name: { deploymentId, name } }, data: { status: StageStatus.RUNNING, startedAt: new Date() } });
+        const startedAt = new Date();
+        await db.deploymentStage.update({ where: { deploymentId_name: { deploymentId, name } }, data: { status: StageStatus.RUNNING, startedAt } });
+        await this.event(deploymentId, "stage.updated", { deploymentId, stage: name, status: StageStatus.RUNNING, startedAt });
         await this.log(deploymentId, name, "info", `Starting ${name}`);
         if (name === "docker-build") {
           const profile = deployment.config.profile as { timeoutSeconds?: number; port?: number };
           await this.docker.build(`deploypilot-${deployment.id.slice(0, 12)}`, ".", { strategy: "DOCKERFILE", timeoutSeconds: profile.timeoutSeconds ?? 900, requiredSecretNames: [] }, { timeoutSeconds: profile.timeoutSeconds ?? 900, memoryLimitMb: 1024, cpuLimit: 1, pidsLimit: 256, networkMode: "bridge" });
         }
-        await db.deploymentStage.update({ where: { deploymentId_name: { deploymentId, name } }, data: { status: StageStatus.SUCCEEDED, endedAt: new Date() } });
+        const endedAt = new Date();
+        await db.deploymentStage.update({ where: { deploymentId_name: { deploymentId, name } }, data: { status: StageStatus.SUCCEEDED, endedAt } });
+        await this.event(deploymentId, "stage.updated", { deploymentId, stage: name, status: StageStatus.SUCCEEDED, startedAt, endedAt });
         await this.log(deploymentId, name, "info", `Completed ${name}`);
       }
       const current = await db.deployment.findUnique({ where: { id: deploymentId }, select: { status: true } });
       if (current?.status === DeploymentStatus.CANCELLED) return { status: DeploymentStatus.CANCELLED };
       await db.deployment.update({ where: { id: deploymentId, status: DeploymentStatus.RUNNING }, data: { status: DeploymentStatus.SUCCEEDED, endedAt: new Date() } });
+      await this.event(deploymentId, "deployment.status", { deploymentId, status: DeploymentStatus.SUCCEEDED });
       await this.log(deploymentId, "system", "info", "Deployment succeeded");
       return { status: DeploymentStatus.SUCCEEDED };
     } catch (error) {
       await db.deployment.update({ where: { id: deploymentId }, data: { status: DeploymentStatus.FAILED, endedAt: new Date() } });
+      await this.event(deploymentId, "deployment.status", { deploymentId, status: DeploymentStatus.FAILED });
       await this.log(deploymentId, "system", "error", error instanceof Error ? error.message : "Deployment failed");
       return { status: DeploymentStatus.FAILED };
     }
@@ -44,5 +51,9 @@ export class DeploymentExecutor {
       db.deploymentLog.create({ data: { deploymentId, sequence, stage, level, message } }),
       db.deploymentEvent.create({ data: { deploymentId, type: "log.appended", payload: { sequence, stage, level, message } } }),
     ]);
+  }
+
+  private async event(deploymentId: string, type: string, payload: Record<string, unknown>) {
+    await db.deploymentEvent.create({ data: { deploymentId, type, payload: payload as object } });
   }
 }
