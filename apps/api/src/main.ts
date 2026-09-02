@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import "reflect-metadata";
 dotenv.config({ path: new URL("../../../.env", import.meta.url) });
-import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoundException, Param, Post, Req, Sse, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Inject, Injectable, Module, NotFoundException, Param, Post, Req, Sse, UnauthorizedException } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { createClient } from "@supabase/supabase-js";
 import type { Request } from "express";
@@ -31,7 +31,7 @@ class AuthService {
 
 @Controller()
 class AppController {
-  constructor(private readonly auth: AuthService, private readonly github: GitHubService, private readonly prisma: PrismaService, private readonly queue: QueueService, private readonly diagnosis: DiagnosisService) {}
+  constructor(@Inject(AuthService) private readonly auth: AuthService, private readonly github: GitHubService, private readonly prisma: PrismaService, private readonly queue: QueueService, private readonly diagnosis: DiagnosisService) {}
 
   @Get("/health") health() { return { service: "deploypilot-api", status: "ok", timestamp: new Date().toISOString() }; }
 
