@@ -1,5 +1,6 @@
-import "dotenv/config";
+import dotenv from "dotenv";
 import { Worker } from "bullmq";
+dotenv.config({ path: new URL("../../../.env", import.meta.url) });
 import { Redis } from "ioredis";
 import { DeploymentExecutor } from "./deployment-executor.js";
 import { sendHeartbeat } from "./heartbeat.js";
