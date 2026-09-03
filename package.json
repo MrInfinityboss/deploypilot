@@ -9,5 +9,5 @@
     "test": "pnpm -r test",
     "dev": "pnpm --parallel --filter @deploypilot/api --filter @deploypilot/worker --filter @deploypilot/web dev"
   },
-  "engines": { "node": ">=20" }
+  "engines": { "node": "22.x" }
 }
