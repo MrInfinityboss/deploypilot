@@ -41,6 +41,12 @@ class AppController {
     return { repositories: await db.repository.findMany({ where: { ownerId: user.id }, orderBy: { fullName: "asc" } }) };
   }
 
+  @Get("/v1/deployments")
+  async allDeployments(@Req() request: Request) {
+    const user = await this.auth.user(request);
+    return { deployments: await db.deployment.findMany({ where: { repository: { ownerId: user.id } }, orderBy: { createdAt: "desc" }, take: 100, select: { id: true, commitSha: true, status: true, trigger: true, createdAt: true, repository: { select: { fullName: true } }, environment: { select: { name: true } } } }) };
+  }
+
   @Get("/v1/github/installations/:installationId/repositories")
   async repositories(@Req() request: Request, @Param("installationId") installationId: string) {
     const user = await this.auth.user(request);
