@@ -37,9 +37,8 @@ class AppController {
 
   @Get("/ready")
   async ready() {
-    const checks = { database: false, redis: false };
-    try { checks.database = await this.prisma.ready(); } catch { /* reported below */ }
-    try { checks.redis = await this.queue.ready(); } catch { /* reported below */ }
+    const probe = async (task: Promise<boolean>) => Promise.race([task.catch(() => false), new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 3000))]);
+    const checks = { database: await probe(this.prisma.ready()), redis: await probe(this.queue.ready()) };
     const ready = checks.database && checks.redis;
     return { service: "deploypilot-api", status: ready ? "ready" : "not_ready", checks, timestamp: new Date().toISOString() };
   }
