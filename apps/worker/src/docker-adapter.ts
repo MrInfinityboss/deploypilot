@@ -15,7 +15,7 @@ export class DockerAdapter {
     const timeout = Math.min(profile.timeoutSeconds, policy.timeoutSeconds) * 1000;
     // The command is deliberately isolated here so it can later be replaced by a Docker SDK.
     // Never interpolate repository-controlled values into a shell string.
-    return this.run("docker", ["build", "--tag", image, context], timeout);
+    return this.run("docker", ["build", "--tag", image, "--memory", `${policy.memoryLimitMb}m`, "--cpus", String(policy.cpuLimit), "--pids-limit", String(policy.pidsLimit), "--network", policy.networkMode, context], timeout);
   }
 
   private assertSafe(image: string, context: string, policy: DockerExecutionPolicy) {
@@ -27,11 +27,18 @@ export class DockerAdapter {
     return new Promise<{ code: number; output: string }>((resolve, reject) => {
       const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
       let output = "";
-      const timer = setTimeout(() => { child.kill("SIGKILL"); reject(new Error("Docker execution timed out")); }, timeoutMs);
-      child.stdout.on("data", (chunk) => { output += chunk.toString(); });
-      child.stderr.on("data", (chunk) => { output += chunk.toString(); });
-      child.on("error", reject);
-      child.on("close", (code) => { clearTimeout(timer); resolve({ code: code ?? 1, output }); });
+      let settled = false;
+      const finish = (callback: () => void) => { if (settled) return; settled = true; clearTimeout(timer); callback(); };
+      const timer = setTimeout(() => { child.kill("SIGKILL"); finish(() => reject(new Error("Docker execution timed out"))); }, timeoutMs);
+      const append = (chunk: Buffer) => { output = (output + chunk.toString()).slice(-200_000); };
+      child.stdout.on("data", append);
+      child.stderr.on("data", append);
+      child.on("error", (error) => finish(() => reject(error)));
+      child.on("close", (code) => finish(() => {
+        const result = { code: code ?? 1, output };
+        if (result.code !== 0) reject(new Error(`Docker build failed with exit code ${result.code}: ${output.trim().slice(-4000)}`));
+        else resolve(result);
+      }));
     });
   }
 }
