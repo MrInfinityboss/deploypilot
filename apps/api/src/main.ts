@@ -35,6 +35,15 @@ class AppController {
 
   @Get("/health") health() { return { service: "deploypilot-api", status: "ok", timestamp: new Date().toISOString() }; }
 
+  @Get("/ready")
+  async ready() {
+    const checks = { database: false, redis: false };
+    try { checks.database = await this.prisma.ready(); } catch { /* reported below */ }
+    try { checks.redis = await this.queue.ready(); } catch { /* reported below */ }
+    const ready = checks.database && checks.redis;
+    return { service: "deploypilot-api", status: ready ? "ready" : "not_ready", checks, timestamp: new Date().toISOString() };
+  }
+
   @Get("/v1/repositories")
   async allRepositories(@Req() request: Request) {
     const user = await this.auth.user(request);

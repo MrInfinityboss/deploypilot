@@ -11,5 +11,7 @@ export class QueueService implements OnModuleDestroy {
     await this.deployments.add("deployment", { deploymentId }, { jobId: deploymentId, attempts: 3, backoff: { type: "exponential", delay: 2000 }, removeOnComplete: 100, removeOnFail: 500 });
   }
 
+  async ready() { return (await this.connection.ping()) === "PONG"; }
+
   async onModuleDestroy() { await this.deployments.close(); await this.connection.quit(); }
 }

@@ -5,5 +5,6 @@ import { db } from "@deploypilot/database/client";
 export class PrismaService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() { await db.$connect(); }
   async onModuleDestroy() { await db.$disconnect(); }
+  async ready() { await db.$queryRaw`SELECT 1`; return true; }
   get client() { return db; }
 }
