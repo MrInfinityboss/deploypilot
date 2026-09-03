@@ -16,6 +16,14 @@ import { createWorkerToken, hashWorkerToken, workerTokenMatches } from "./worker
 import { branchFromRef, verifyGitHubSignature, type PushPayload } from "./github-webhook.js";
 import { DiagnosisService } from "./diagnosis.service.js";
 
+const WORKER_HEARTBEAT_TIMEOUT_MS = 90_000;
+
+function workerPresence(lastSeenAt: Date | null, revokedAt: Date | null) {
+  if (revokedAt) return "REVOKED" as const;
+  if (!lastSeenAt) return "OFFLINE" as const;
+  return Date.now() - lastSeenAt.getTime() <= WORKER_HEARTBEAT_TIMEOUT_MS ? "ONLINE" as const : "OFFLINE" as const;
+}
+
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "");
 
 @Injectable()
@@ -69,7 +77,7 @@ class AppController {
     const user = await this.auth.user(request);
     const repository = await db.repository.findFirst({ where: { id: repositoryId, ownerId: user.id }, include: { configs: true, environments: true, workers: { select: { id: true, name: true, version: true, lastSeenAt: true, revokedAt: true } } } });
     if (!repository) throw new NotFoundException("Repository not found");
-    return repository;
+    return { ...repository, workers: repository.workers.map((worker) => ({ ...worker, status: workerPresence(worker.lastSeenAt, worker.revokedAt) })) };
   }
 
   @Post("/v1/repositories/:repositoryId/configs")
@@ -229,7 +237,8 @@ class AppController {
     const user = await this.auth.user(request);
     const repository = await db.repository.findFirst({ where: { id: repositoryId, ownerId: user.id }, select: { id: true } });
     if (!repository) throw new NotFoundException("Repository not found");
-    return { workers: await db.worker.findMany({ where: { repositoryId }, select: { id: true, name: true, version: true, capabilities: true, lastSeenAt: true, revokedAt: true, createdAt: true }, orderBy: { createdAt: "desc" } }) };
+    const workers = await db.worker.findMany({ where: { repositoryId }, select: { id: true, name: true, version: true, capabilities: true, lastSeenAt: true, revokedAt: true, createdAt: true }, orderBy: { createdAt: "desc" } });
+    return { workers: workers.map((worker) => ({ ...worker, status: workerPresence(worker.lastSeenAt, worker.revokedAt) })) };
   }
 
   @Post("/v1/workers/:workerId/revoke")
