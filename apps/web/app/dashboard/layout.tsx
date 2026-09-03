@@ -11,7 +11,7 @@ const nav = [
 ];
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname(); const router = useRouter(); const [sidebarOpen, setSidebarOpen] = useState(false); const [compact, setCompact] = useState(false);
-  useEffect(() => { const query = window.matchMedia("(max-width: 1400px)"); const update = () => setCompact(query.matches); update(); query.addEventListener("change", update); return () => query.removeEventListener("change", update); }, []);
+  useEffect(() => { const update = () => setCompact((window.visualViewport?.width ?? window.innerWidth) <= 1000); update(); window.addEventListener("resize", update); window.visualViewport?.addEventListener("resize", update); return () => { window.removeEventListener("resize", update); window.visualViewport?.removeEventListener("resize", update); }; }, []);
   const signOut = async () => { const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!); await supabase.auth.signOut(); router.replace("/login"); };
   return <div className="dp-shell" style={{ minHeight:"100vh", display:"grid", gridTemplateColumns:"232px 1fr" }}>
     <aside className={`dp-sidebar${sidebarOpen ? " dp-sidebar-open" : ""}`} style={{ borderRight:"1px solid var(--line)", background:"#0d1016", padding:"25px 14px", position:compact?"fixed":"sticky", zIndex:compact?30:undefined, left:compact?0:undefined, top:0, width:compact?250:undefined, height:"100vh", display:"flex", flexDirection:"column", transform:compact?(sidebarOpen?"translateX(0)":"translateX(-105%)"):undefined, boxShadow:compact?"20px 0 50px #0008":undefined, transition:compact?"transform .22s cubic-bezier(.23,1,.32,1)":undefined }}>
