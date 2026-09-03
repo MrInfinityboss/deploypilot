@@ -37,10 +37,17 @@ export class DeploymentExecutor {
       await this.log(deploymentId, "system", "info", "Deployment succeeded");
       return { status: DeploymentStatus.SUCCEEDED };
     } catch (error) {
-      await db.deployment.update({ where: { id: deploymentId }, data: { status: DeploymentStatus.FAILED, endedAt: new Date() } });
-      await this.event(deploymentId, "deployment.status", { deploymentId, status: DeploymentStatus.FAILED });
-      await this.log(deploymentId, "system", "error", error instanceof Error ? error.message : "Deployment failed");
-      return { status: DeploymentStatus.FAILED };
+      const message = error instanceof Error ? error.message : "Deployment failed";
+      const status = message.includes("timed out") ? DeploymentStatus.TIMED_OUT : DeploymentStatus.FAILED;
+      const activeStage = await db.deploymentStage.findFirst({ where: { deploymentId, status: StageStatus.RUNNING }, select: { name: true } });
+      if (activeStage) {
+        await db.deploymentStage.update({ where: { deploymentId_name: { deploymentId, name: activeStage.name } }, data: { status: status === DeploymentStatus.TIMED_OUT ? StageStatus.FAILED : StageStatus.FAILED, endedAt: new Date() } });
+        await this.event(deploymentId, "stage.updated", { deploymentId, stage: activeStage.name, status: StageStatus.FAILED, endedAt: new Date() });
+      }
+      await db.deployment.update({ where: { id: deploymentId }, data: { status, endedAt: new Date() } });
+      await this.event(deploymentId, "deployment.status", { deploymentId, status });
+      await this.log(deploymentId, "system", "error", message);
+      return { status };
     }
   }
 

@@ -151,7 +151,7 @@ class AppController {
   @Post("/v1/deployments/:deploymentId/retry")
   async retry(@Req() request: Request, @Param("deploymentId") deploymentId: string) {
     const user = await this.auth.user(request);
-    const previous = await db.deployment.findFirst({ where: { id: deploymentId, status: DeploymentStatus.FAILED, repository: { ownerId: user.id } }, include: { repository: { include: { configs: true, environments: true, workers: true } } } });
+    const previous = await db.deployment.findFirst({ where: { id: deploymentId, status: { in: [DeploymentStatus.FAILED, DeploymentStatus.TIMED_OUT] }, repository: { ownerId: user.id } }, include: { repository: { include: { configs: true, environments: true, workers: true } } } });
     if (!previous) throw new NotFoundException("Failed deployment not found");
     const config = previous.repository.configs.find((item) => item.id === previous.configId);
     const environment = previous.repository.environments.find((item) => item.id === previous.environmentId);
