@@ -37,6 +37,17 @@ describe("DockerAdapter safety boundary", () => {
     await expect(promise).rejects.toThrow("Dockerfile syntax error");
   });
 
+  it("terminates an active Docker build when aborted", async () => {
+    const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; kill: ReturnType<typeof vi.fn> };
+    child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.kill = vi.fn();
+    mockedSpawn.mockReturnValue(child as never);
+    const controller = new AbortController();
+    const promise = adapter.build("safe-image", ".", profile, policy, controller.signal);
+    controller.abort();
+    await expect(promise).rejects.toThrow("Docker execution cancelled");
+    expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+  });
+
   it("passes resource limits to Docker", async () => {
     const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; stderr: EventEmitter };
     child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
