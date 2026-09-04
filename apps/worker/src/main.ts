@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import { Worker } from "bullmq";
+import { Queue, Worker } from "bullmq";
 dotenv.config({ path: new URL("../../../.env", import.meta.url) });
 import { Redis } from "ioredis";
 import { DeploymentExecutor } from "./deployment-executor.js";
@@ -17,6 +17,7 @@ const worker = new Worker("deployments", async (job) => {
   if (!job.data?.deploymentId) throw new Error("Deployment job is missing deploymentId");
   return executor.execute(job.data.deploymentId as string);
 }, { connection, concurrency: 1 });
+const queue = new Queue("deployments", { connection });
 
 connection.on("ready", () => console.log("[worker] Redis connection ready"));
 connection.on("error", (error) => console.error("[worker] Redis connection error", error.message));
@@ -24,6 +25,16 @@ worker.on("active", (job) => console.log(`[worker] claimed deployment ${job.data
 worker.on("completed", (job) => console.log(`[worker] completed ${job.id}`));
 worker.on("failed", (job, error) => console.error(`[worker] failed ${job?.id}`, error));
 worker.on("error", (error) => console.error("[worker] queue error", error.message));
+
+const reportQueue = async () => {
+  try {
+    const counts = await queue.getJobCounts("waiting", "active", "completed", "failed", "delayed");
+    console.log(`[worker] queue waiting=${counts.waiting} active=${counts.active} failed=${counts.failed} delayed=${counts.delayed}`);
+  } catch (error) { console.error("[worker] queue inspection failed", error instanceof Error ? error.message : error); }
+};
+await worker.waitUntilReady();
+await reportQueue();
+setInterval(() => void reportQueue(), 15000);
 
 if (workerId && workerToken) {
   const heartbeat = async () => {
