@@ -257,5 +257,6 @@ class AppModule {}
 
 const app = await NestFactory.create(AppModule);
 app.use(json({ verify: (request, _response, buffer) => { (request as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer); } }));
-app.enableCors({ origin: true, credentials: true });
+const allowedOrigins = (process.env.WEB_ORIGIN ?? "http://localhost:3000").split(",").map((origin) => origin.trim()).filter(Boolean);
+app.enableCors({ origin: allowedOrigins, credentials: true });
 await app.listen(Number(process.env.PORT ?? process.env.API_PORT ?? 4000), "0.0.0.0");
