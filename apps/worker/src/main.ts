@@ -19,8 +19,9 @@ const worker = new Worker("deployments", async (job) => {
 }, { connection, concurrency: 1 });
 const queue = new Queue("deployments", { connection });
 
+connection.on("connect", () => console.log("[worker] connecting to Redis ..."));
 connection.on("ready", () => console.log("[worker] Redis connection ready"));
-connection.on("error", (error) => console.error("[worker] Redis connection error", error.message));
+connection.on("error", (error) => console.error("[worker] Redis connection failed:", error.message));
 worker.on("active", (job) => console.log(`[worker] claimed deployment ${job.data?.deploymentId ?? job.id}`));
 worker.on("completed", (job) => console.log(`[worker] completed ${job.id}`));
 worker.on("failed", (job, error) => console.error(`[worker] failed ${job?.id}`, error));
@@ -40,6 +41,7 @@ await Promise.race([
   worker.waitUntilReady(),
   new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Redis connection timed out after 10 seconds")), 10000)),
 ]);
+console.log("[worker] queue waiting...");
 await reportQueue();
 setInterval(() => void reportQueue(), 15000);
 
