@@ -9,8 +9,8 @@ const apiUrl = process.env.WORKER_API_URL ?? "http://localhost:4000";
 const workerId = process.env.WORKER_ID;
 const workerToken = process.env.WORKER_TOKEN;
 const version = process.env.WORKER_VERSION ?? "0.1.0";
-const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
-const connection = new Redis({ host: redisUrl.hostname, port: Number(redisUrl.port || 6379), password: redisUrl.password || undefined, maxRetriesPerRequest: null });
+const redisUrl = process.env.REDIS_URL ?? "redis://localhost:6379";
+const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
 const executor = new DeploymentExecutor();
 
 const worker = new Worker("deployments", async (job) => {
