@@ -18,8 +18,12 @@ const worker = new Worker("deployments", async (job) => {
   return executor.execute(job.data.deploymentId as string);
 }, { connection, concurrency: 1 });
 
+connection.on("ready", () => console.log("[worker] Redis connection ready"));
+connection.on("error", (error) => console.error("[worker] Redis connection error", error.message));
+worker.on("active", (job) => console.log(`[worker] claimed deployment ${job.data?.deploymentId ?? job.id}`));
 worker.on("completed", (job) => console.log(`[worker] completed ${job.id}`));
 worker.on("failed", (job, error) => console.error(`[worker] failed ${job?.id}`, error));
+worker.on("error", (error) => console.error("[worker] queue error", error.message));
 
 if (workerId && workerToken) {
   const heartbeat = async () => {
