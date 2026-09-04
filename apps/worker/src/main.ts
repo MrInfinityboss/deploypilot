@@ -28,11 +28,18 @@ worker.on("error", (error) => console.error("[worker] queue error", error.messag
 
 const reportQueue = async () => {
   try {
-    const counts = await queue.getJobCounts("waiting", "active", "completed", "failed", "delayed");
+    const counts = await Promise.race([
+      queue.getJobCounts("waiting", "active", "completed", "failed", "delayed"),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("queue inspection timed out")), 5000)),
+    ]);
     console.log(`[worker] queue waiting=${counts.waiting} active=${counts.active} failed=${counts.failed} delayed=${counts.delayed}`);
   } catch (error) { console.error("[worker] queue inspection failed", error instanceof Error ? error.message : error); }
 };
-await worker.waitUntilReady();
+console.log(`[worker] connecting to Redis ${new URL(redisUrl).hostname}`);
+await Promise.race([
+  worker.waitUntilReady(),
+  new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Redis connection timed out after 10 seconds")), 10000)),
+]);
 await reportQueue();
 setInterval(() => void reportQueue(), 15000);
 
