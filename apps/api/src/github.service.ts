@@ -10,10 +10,15 @@ export type GitHubRepository = {
   html_url: string;
 };
 
+function normalizePrivateKey(value: string) {
+  const normalized = value.replace(/\\n/g, "\n").replace(/\r\n/g, "\n").trim();
+  return normalized.startsWith('"') && normalized.endsWith('"') ? normalized.slice(1, -1).trim() : normalized;
+}
+
 @Injectable()
 export class GitHubService {
   private readonly appId = process.env.GITHUB_APP_ID;
-  private readonly privateKey = process.env.GITHUB_PRIVATE_KEY?.replace(/\\n/g, "\n") ?? (process.env.GITHUB_PRIVATE_KEY_PATH ? readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH, "utf8") : undefined);
+  private readonly privateKey = process.env.GITHUB_PRIVATE_KEY ? normalizePrivateKey(process.env.GITHUB_PRIVATE_KEY) : (process.env.GITHUB_PRIVATE_KEY_PATH ? normalizePrivateKey(readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH, "utf8")) : undefined);
 
   private async token(installationId: string) {
     if (!this.appId || !this.privateKey) throw new InternalServerErrorException("GitHub App is not configured");
