@@ -17,7 +17,7 @@ const worker = new Worker("deployments", async (job) => {
   if (!job.data?.deploymentId) throw new Error("Deployment job is missing deploymentId");
   return executor.execute(job.data.deploymentId as string);
 }, { connection, concurrency: 1 });
-const queue = new Queue("deployments", { connection });
+const queue = new Queue("deployments", { connection: new Redis(redisUrl, { maxRetriesPerRequest: null }) });
 
 connection.on("connect", () => console.log("[worker] connecting to Redis ..."));
 connection.on("ready", () => console.log("[worker] Redis connection ready"));
