@@ -95,7 +95,7 @@ class AppController {
     if (!body.name) throw new BadRequestException("Environment name is required");
     const repository = await db.repository.findFirst({ where: { id: repositoryId, ownerId: user.id }, select: { id: true } });
     if (!repository) throw new NotFoundException("Repository not found");
-    return db.environment.create({ data: { repositoryId, name: body.name, url: body.url, policy: { allowedWorkers: [] } } });
+    return db.environment.upsert({ where: { repositoryId_name: { repositoryId, name: body.name } }, update: { url: body.url }, create: { repositoryId, name: body.name, url: body.url, policy: { allowedWorkers: [] } } });
   }
 
   @Post("/v1/repositories/:repositoryId/deployments")
