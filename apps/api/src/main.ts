@@ -19,6 +19,10 @@ import { r2 } from "./r2.service.js";
 import { NotificationsService } from "./notifications.service.js";
 
 const WORKER_HEARTBEAT_TIMEOUT_MS = 90_000;
+const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+const RATE_WINDOW_MS = 60_000;
+const API_LIMIT = 180;
+const WEBHOOK_LIMIT = 60;
 
 function workerPresence(lastSeenAt: Date | null, revokedAt: Date | null) {
   if (revokedAt) return "REVOKED" as const;
@@ -289,6 +293,21 @@ class AppController {
 class AppModule {}
 
 const app = await NestFactory.create(AppModule);
+app.use((request: Request, response: Response, next: NextFunction) => {
+  const now = Date.now();
+  if (rateBuckets.size > 2_000) for (const [key, bucket] of rateBuckets) if (bucket.resetAt <= now) rateBuckets.delete(key);
+  const address = request.ip ?? request.socket.remoteAddress ?? "unknown";
+  const scope = request.path === "/webhooks/github" ? "webhook" : "api";
+  const limit = scope === "webhook" ? WEBHOOK_LIMIT : API_LIMIT;
+  const key = `${scope}:${address}`;
+  const bucket = rateBuckets.get(key);
+  const current = !bucket || bucket.resetAt <= now ? { count: 1, resetAt: now + RATE_WINDOW_MS } : { count: bucket.count + 1, resetAt: bucket.resetAt };
+  rateBuckets.set(key, current);
+  response.setHeader("X-RateLimit-Limit", limit);
+  response.setHeader("X-RateLimit-Remaining", Math.max(0, limit - current.count));
+  if (current.count > limit) { response.setHeader("Retry-After", String(Math.ceil((current.resetAt - now) / 1000))); return response.status(429).json({ message: "Too many requests. Try again shortly." }); }
+  next();
+});
 app.use((request: Request, response: Response, next: NextFunction) => { response.setHeader("X-Content-Type-Options", "nosniff"); response.setHeader("X-Frame-Options", "DENY"); response.setHeader("Referrer-Policy", "no-referrer"); next(); });
 app.use(json({ limit: "2mb", verify: (request, _response, buffer) => { (request as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer); } }));
 const allowedOrigins = (process.env.WEB_ORIGIN ?? "http://localhost:3000").split(",").map((origin) => origin.trim()).filter(Boolean);
