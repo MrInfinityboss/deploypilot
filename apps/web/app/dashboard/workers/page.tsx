@@ -134,6 +134,20 @@ export default function WorkersPage() {
     }
   };
 
+  const rotateToken = async (worker: Worker) => {
+    if (!window.confirm(`Rotate the token for “${worker.name}”? The current worker token will stop working immediately.`)) return;
+    try {
+      const result = await apiRequest<{ workerId: string; token: string }>(`/v1/workers/${worker.id}/rotate-token`, { method: "POST" });
+      setWorkerId(result.workerId);
+      setToken(result.token);
+      setMsg(`${worker.name} token rotated. Update WORKER_TOKEN on the worker before its next heartbeat.`);
+      const refreshed = await apiRequest<{ workers: Worker[] }>(`/v1/repositories/${repoId}/workers`);
+      setWorkers(refreshed.workers);
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : "Unable to rotate worker token.");
+    }
+  };
+
   return (
     <>
       <PageHeader eyebrow="Runtime / Docker" title="Workers" description="Workers connect outbound from computers you control and execute bounded Docker jobs locally." />
@@ -185,7 +199,7 @@ export default function WorkersPage() {
               <div className="dp-mono" style={{ color: "var(--muted)", fontSize: 11, marginTop: 7 }}>id: {worker.id} · v{worker.version} · last heartbeat {formatHeartbeatAge(worker.lastSeenAt)}</div>
               <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 5 }}>{worker.lastSeenAt ? `Last seen ${formatDate(worker.lastSeenAt)}` : "This worker has not sent a heartbeat yet."}</div>
             </div>
-            {!worker.revokedAt && <button className="dp-btn dp-btn-danger" onClick={() => void revoke(worker)}>Revoke access</button>}
+            {!worker.revokedAt && <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><button className="dp-btn" onClick={() => void rotateToken(worker)}>Rotate token</button><button className="dp-btn dp-btn-danger" onClick={() => void revoke(worker)}>Revoke access</button></div>}
           </Card>;
         })}
       </div>

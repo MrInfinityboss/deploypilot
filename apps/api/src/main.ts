@@ -269,6 +269,16 @@ class AppController {
     return { workerId, status: "REVOKED" };
   }
 
+  @Post("/v1/workers/:workerId/rotate-token")
+  async rotateWorkerToken(@Req() request: Request, @Param("workerId") workerId: string) {
+    const user = await this.auth.user(request);
+    const worker = await db.worker.findFirst({ where: { id: workerId, repository: { ownerId: user.id }, revokedAt: null }, select: { id: true } });
+    if (!worker) throw new NotFoundException("Active worker not found");
+    const token = createWorkerToken();
+    await db.worker.update({ where: { id: workerId }, data: { tokenHash: hashWorkerToken(token), lastSeenAt: null } });
+    return { workerId, token, warning: "The previous token is invalid immediately. Store this token securely; it will not be shown again." };
+  }
+
   @Post("/v1/workers/:workerId/heartbeat")
   async heartbeat(@Req() request: Request, @Param("workerId") workerId: string, @Body() body: { version?: string }) {
     const authorization = request.headers.authorization;
