@@ -16,6 +16,7 @@ import { createWorkerToken, hashWorkerToken, workerTokenMatches } from "./worker
 import { branchFromRef, verifyGitHubSignature, type PushPayload } from "./github-webhook.js";
 import { DiagnosisService } from "./diagnosis.service.js";
 import { r2 } from "./r2.service.js";
+import { NotificationsService } from "./notifications.service.js";
 
 const WORKER_HEARTBEAT_TIMEOUT_MS = 90_000;
 
@@ -40,7 +41,7 @@ class AuthService {
 
 @Controller()
 class AppController {
-  constructor(@Inject(AuthService) private readonly auth: AuthService, @Inject(GitHubService) private readonly github: GitHubService, @Inject(PrismaService) private readonly prisma: PrismaService, @Inject(QueueService) private readonly queue: QueueService, @Inject(DiagnosisService) private readonly diagnosis: DiagnosisService) {}
+  constructor(@Inject(AuthService) private readonly auth: AuthService, @Inject(GitHubService) private readonly github: GitHubService, @Inject(PrismaService) private readonly prisma: PrismaService, @Inject(QueueService) private readonly queue: QueueService, @Inject(DiagnosisService) private readonly diagnosis: DiagnosisService, @Inject(NotificationsService) private readonly notifications: NotificationsService) {}
 
   @Get("/health") health() { return { service: "deploypilot-api", status: "ok", timestamp: new Date().toISOString() }; }
 
@@ -270,9 +271,19 @@ class AppController {
     const updated = await db.worker.update({ where: { id: workerId }, data: { lastSeenAt: new Date(), version: body.version ?? worker.version } });
     return { workerId: updated.id, status: "ONLINE", lastSeenAt: updated.lastSeenAt };
   }
+
+  @Post("/v1/workers/:workerId/deployments/:deploymentId/result")
+  async deploymentResult(@Req() request: Request, @Param("workerId") workerId: string, @Param("deploymentId") deploymentId: string, @Body() body: { status?: string }) {
+    const token = request.headers.authorization?.startsWith("Bearer ") ? request.headers.authorization.slice(7) : "";
+    const worker = await db.worker.findUnique({ where: { id: workerId } });
+    if (!worker || worker.revokedAt || !workerTokenMatches(token, worker.tokenHash)) throw new UnauthorizedException();
+    const deployment = await db.deployment.findFirst({ where: { id: deploymentId, targetWorkerId: workerId }, select: { id: true } });
+    if (!deployment) throw new NotFoundException("Deployment not found for worker");
+    return this.notifications.deploymentResult(deployment.id, body.status ?? "UNKNOWN");
+  }
 }
 
-@Module({ controllers: [AppController], providers: [AuthService, GitHubService, PrismaService, QueueService, DiagnosisService] })
+@Module({ controllers: [AppController], providers: [AuthService, GitHubService, PrismaService, QueueService, DiagnosisService, NotificationsService] })
 class AppModule {}
 
 const app = await NestFactory.create(AppModule);

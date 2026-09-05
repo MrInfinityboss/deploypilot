@@ -4,6 +4,7 @@ dotenv.config({ path: new URL("../../../.env", import.meta.url) });
 import { Redis } from "ioredis";
 import { DeploymentExecutor } from "./deployment-executor.js";
 import { sendHeartbeat } from "./heartbeat.js";
+import { reportDeploymentResult } from "./result-notifier.js";
 
 const apiUrl = process.env.WORKER_API_URL ?? "http://localhost:4000";
 const workerId = process.env.WORKER_ID;
@@ -15,7 +16,16 @@ const executor = new DeploymentExecutor();
 
 const worker = new Worker("deployments", async (job) => {
   if (!job.data?.deploymentId) throw new Error("Deployment job is missing deploymentId");
-  return executor.execute(job.data.deploymentId as string);
+  const deploymentId = job.data.deploymentId as string;
+  const result = await executor.execute(deploymentId);
+  if (workerId && workerToken && result.status) {
+    try {
+      const notification = await reportDeploymentResult(apiUrl, workerId, workerToken, deploymentId, result.status);
+      if (notification.sent) console.log(`[worker] notification sent for ${deploymentId}`);
+      else console.log(`[worker] notification skipped: ${notification.reason ?? "not configured"}`);
+    } catch (error) { console.error("[worker] notification failed", error); }
+  }
+  return result;
 }, { connection, concurrency: 1 });
 const queue = new Queue("deployments", { connection: new Redis(redisUrl, { maxRetriesPerRequest: null }) });
 
