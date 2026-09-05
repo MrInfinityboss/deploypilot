@@ -51,11 +51,11 @@ The API health endpoint is available at `http://localhost:4000/health`. The web 
 8. Install the worker agent on each Docker-capable computer. The agent will use a revocable worker credential and outbound HTTPS; do not publish the Docker socket.
 9. Configure the Cloudflare domain and Resend sender only after the application endpoints are working.
 
-Detailed provider-specific runbooks will be added as the corresponding integrations are implemented. Never put production secrets in GitHub, source files, Docker images, or client-side environment variables.
+See [`docs/PRODUCTION_RUNBOOK.md`](docs/PRODUCTION_RUNBOOK.md) for the complete provider configuration, worker operations, recovery behavior, troubleshooting matrix, incident response, and release checklist. Never put production secrets in GitHub, source files, Docker images, or client-side environment variables.
 
-## Delivery milestones
+## Current production capabilities
 
-The first implementation slice establishes the monorepo, contracts, schema, local dependencies, and health boundaries. Next slices will add Supabase session verification, GitHub App repository access, deployment creation and outbox handling, the worker registration protocol, Docker execution limits, durable logs/SSE replay, push webhooks, and grounded AI diagnosis.
+The production system supports Supabase GitHub authentication, GitHub push deployments, BullMQ queueing, owner-controlled Docker workers, live deployment events and logs, retries and cancellation, dashboard metrics with automatic refresh, Cloudflare R2 log archives, Resend deployment notifications, grounded OpenAI diagnosis, worker token rotation, stale-worker recovery, request rate limits, webhook validation, and security response headers.
 
 ## Safety boundary
 
