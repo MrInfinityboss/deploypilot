@@ -4,7 +4,7 @@ dotenv.config({ path: new URL("../../../.env", import.meta.url) });
 import { BadRequestException, Body, Controller, Get, Inject, Injectable, Module, NotFoundException, Param, Post, Req, Sse, UnauthorizedException } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { createClient } from "@supabase/supabase-js";
-import type { Request } from "express";
+import type { NextFunction, Request, Response } from "express";
 import { json } from "express";
 import { Observable } from "rxjs";
 import { db } from "@deploypilot/database/client";
@@ -214,6 +214,8 @@ class AppController {
 
   @Post("/webhooks/github")
   async githubWebhook(@Req() request: Request, @Body() payload: PushPayload) {
+    if (request.headers["x-github-event"] !== "push") return { accepted: true, ignored: true, reason: "Unsupported GitHub event" };
+    if (!payload.after || !payload.repository?.id || !payload.repository.full_name) throw new BadRequestException("Invalid push payload");
     const rawBody = (request as Request & { rawBody?: Buffer }).rawBody;
     if (!rawBody || !verifyGitHubSignature(rawBody, request.headers["x-hub-signature-256"] as string | undefined, process.env.GITHUB_WEBHOOK_SECRET)) throw new UnauthorizedException("Invalid GitHub webhook signature");
     const deliveryId = request.headers["x-github-delivery"] as string | undefined;
@@ -287,7 +289,8 @@ class AppController {
 class AppModule {}
 
 const app = await NestFactory.create(AppModule);
-app.use(json({ verify: (request, _response, buffer) => { (request as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer); } }));
+app.use((request: Request, response: Response, next: NextFunction) => { response.setHeader("X-Content-Type-Options", "nosniff"); response.setHeader("X-Frame-Options", "DENY"); response.setHeader("Referrer-Policy", "no-referrer"); next(); });
+app.use(json({ limit: "2mb", verify: (request, _response, buffer) => { (request as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer); } }));
 const allowedOrigins = (process.env.WEB_ORIGIN ?? "http://localhost:3000").split(",").map((origin) => origin.trim()).filter(Boolean);
 app.enableCors({ origin: allowedOrigins, credentials: true });
 await app.listen(Number(process.env.PORT ?? process.env.API_PORT ?? 4000), "0.0.0.0");
