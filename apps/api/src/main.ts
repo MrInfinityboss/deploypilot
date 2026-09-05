@@ -17,6 +17,7 @@ import { branchFromRef, verifyGitHubSignature, type PushPayload } from "./github
 import { DiagnosisService } from "./diagnosis.service.js";
 import { r2 } from "./r2.service.js";
 import { NotificationsService } from "./notifications.service.js";
+import { RecoveryService } from "./recovery.service.js";
 
 const WORKER_HEARTBEAT_TIMEOUT_MS = 90_000;
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
@@ -289,7 +290,7 @@ class AppController {
   }
 }
 
-@Module({ controllers: [AppController], providers: [AuthService, GitHubService, PrismaService, QueueService, DiagnosisService, NotificationsService] })
+@Module({ controllers: [AppController], providers: [AuthService, GitHubService, PrismaService, QueueService, DiagnosisService, NotificationsService, RecoveryService] })
 class AppModule {}
 
 const app = await NestFactory.create(AppModule);

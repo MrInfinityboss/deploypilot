@@ -51,7 +51,7 @@ export class DeploymentExecutor {
 
       await this.throwIfCancelled(deploymentId, cancellation);
       const finalized = await db.deployment.updateMany({ where: { id: deploymentId, status: DeploymentStatus.RUNNING }, data: { status: DeploymentStatus.SUCCEEDED, endedAt: new Date() } });
-      if (finalized.count !== 1) return { status: DeploymentStatus.CANCELLED };
+      if (finalized.count !== 1) { const current = await db.deployment.findUnique({ where: { id: deploymentId }, select: { status: true } }); return { status: current?.status ?? DeploymentStatus.CANCELLED }; }
       await this.event(deploymentId, "deployment.status", { deploymentId, status: DeploymentStatus.SUCCEEDED });
       await this.log(deploymentId, "system", "info", "Deployment succeeded");
       return { status: DeploymentStatus.SUCCEEDED };
