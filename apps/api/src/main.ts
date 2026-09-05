@@ -15,6 +15,7 @@ import { QueueService } from "./queue.service.js";
 import { createWorkerToken, hashWorkerToken, workerTokenMatches } from "./worker-auth.js";
 import { branchFromRef, verifyGitHubSignature, type PushPayload } from "./github-webhook.js";
 import { DiagnosisService } from "./diagnosis.service.js";
+import { r2 } from "./r2.service.js";
 
 const WORKER_HEARTBEAT_TIMEOUT_MS = 90_000;
 
@@ -145,6 +146,16 @@ class AppController {
     if (!deployment) throw new NotFoundException("Deployment not found");
     const logs = await db.deploymentLog.findMany({ where: { deploymentId, sequence: { gt: cursor } }, orderBy: { sequence: "asc" }, take: limit });
     return { logs, nextCursor: logs.at(-1)?.sequence ?? cursor, hasMore: logs.length === limit };
+  }
+
+  @Post("/v1/deployments/:deploymentId/logs/archive")
+  async archiveLogs(@Req() request: Request, @Param("deploymentId") deploymentId: string) {
+    const user = await this.auth.user(request);
+    const deployment = await db.deployment.findFirst({ where: { id: deploymentId, repository: { ownerId: user.id } }, include: { logs: { orderBy: { sequence: "asc" } } } });
+    if (!deployment) throw new NotFoundException("Deployment not found");
+    if (!r2.configured()) throw new BadRequestException("R2 storage is not configured on the API");
+    const archive = await r2.archiveLogs(deploymentId, deployment.logs);
+    return { ...archive, downloadUrl: await r2.signedLogUrl(deploymentId), archivedAt: new Date().toISOString() };
   }
 
   @Post("/v1/deployments/:deploymentId/cancel")
