@@ -59,6 +59,7 @@ API_URL=https://<your-render-api-domain>
 WORKER_ID=<registered worker ID>
 WORKER_TOKEN=<worker token>
 REDIS_URL=<same hosted Redis URL used by the API>
+DATABASE_URL=<Supabase pooled connection string>
 ```
 
 The API and worker must use the exact same Redis instance. `localhost` is valid only when both services use the same local Redis service.
@@ -93,10 +94,10 @@ The worker should also print periodic heartbeat messages. A completed job prints
 Users do not need to keep VS Code open after installing the worker service. On Linux, run the installer from a terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MrInfinityboss/deploypilot/v1.0.2/scripts/install-worker.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MrInfinityboss/deploypilot/v1.0.3/scripts/install-worker.sh | bash
 ```
 
-The installer prompts for the API URL, worker ID, worker token, and shared Redis URL. It installs the worker under `~/.deploypilot-worker`, stores the local environment file with restricted permissions, and creates the `deploypilot-worker` systemd service.
+The installer prompts for the API URL, worker ID, worker token, shared Redis URL, and Supabase `DATABASE_URL`. It installs the worker under `~/.deploypilot-worker`, stores the local environment file with restricted permissions, and creates the `deploypilot-worker` systemd service.
 
 Manage the Linux service with:
 
@@ -109,10 +110,10 @@ journalctl -u deploypilot-worker -f
 On Windows, open PowerShell and run:
 
 ```powershell
-irm https://raw.githubusercontent.com/MrInfinityboss/deploypilot/v1.0.2/scripts/install-worker.ps1 | iex
+irm https://raw.githubusercontent.com/MrInfinityboss/deploypilot/v1.0.3/scripts/install-worker.ps1 | iex
 ```
 
-The Windows installer downloads the tagged worker source, installs dependencies, stores the configuration under the current user's profile, and registers a Scheduled Task that starts at user logon and restarts after failures. The task is named `DeployPilot Worker`.
+The Windows installer downloads the tagged worker source, installs dependencies, stores the configuration under the current user's profile, and registers a Scheduled Task that starts at user logon and restarts after failures. It reads all five values from the clipboard so long credentials do not need to be pasted into the terminal. The task is named `DeployPilot Worker`.
 
 Only run installer scripts from a release tag that you trust. Review the script before using it in a regulated or restricted environment.
 
