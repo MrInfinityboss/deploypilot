@@ -21,6 +21,7 @@ For local development, the GitHub App private key can be loaded from a file with
 | `packages/shared` | Deployment, worker, and SSE contracts |
 | `infra` | Local Docker Compose services |
 | `docs` | Service setup and operational runbooks |
+| `scripts` | Worker installation and service setup scripts |
 
 ## Local start
 
@@ -38,6 +39,14 @@ pnpm --filter @deploypilot/worker dev
 ```
 
 The API health endpoint is available at `http://localhost:4000/health`. The web application will be added to the same local workflow as the dashboard milestones are implemented.
+
+For a user-controlled production worker, use the tagged installer instead of keeping VS Code open:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MrInfinityboss/deploypilot/v1.0.1/scripts/install-worker.sh | bash
+```
+
+Windows users can run the PowerShell installer described in [`docs/PRODUCTION_RUNBOOK.md`](docs/PRODUCTION_RUNBOOK.md). Both installers configure the worker as an automatically restarting background service.
 
 ## Production setup order
 
