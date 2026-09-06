@@ -17,7 +17,15 @@ const executor = new DeploymentExecutor();
 const worker = new Worker("deployments", async (job) => {
   if (!job.data?.deploymentId) throw new Error("Deployment job is missing deploymentId");
   const deploymentId = job.data.deploymentId as string;
-  const result = await executor.execute(deploymentId);
+  let result: { status?: string };
+  try {
+    result = await executor.execute(deploymentId);
+  } catch (error) {
+    if (workerId && workerToken) {
+      try { await reportDeploymentResult(apiUrl, workerId, workerToken, deploymentId, "FAILED"); } catch (reportError) { console.error("[worker] failed to report execution error", reportError); }
+    }
+    throw error;
+  }
   if (workerId && workerToken && result.status) {
     try {
       const notification = await reportDeploymentResult(apiUrl, workerId, workerToken, deploymentId, result.status);

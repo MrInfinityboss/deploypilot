@@ -296,7 +296,20 @@ class AppController {
     if (!worker || worker.revokedAt || !workerTokenMatches(token, worker.tokenHash)) throw new UnauthorizedException();
     const deployment = await db.deployment.findFirst({ where: { id: deploymentId, targetWorkerId: workerId }, select: { id: true } });
     if (!deployment) throw new NotFoundException("Deployment not found for worker");
-    return this.notifications.deploymentResult(deployment.id, body.status ?? "UNKNOWN");
+    const status = body.status ?? "UNKNOWN";
+    if (!["SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT"].includes(status)) throw new BadRequestException("Invalid deployment result status");
+    const finalized = await db.deployment.updateMany({ where: { id: deployment.id, status: { in: [DeploymentStatus.QUEUED, DeploymentStatus.RUNNING] } }, data: { status: status as DeploymentStatus, endedAt: new Date() } });
+    if (finalized.count === 1) {
+      const last = await db.deploymentLog.findFirst({ where: { deploymentId: deployment.id }, orderBy: { sequence: "desc" }, select: { sequence: true } });
+      const sequence = (last?.sequence ?? 0) + 1;
+      const message = `Worker reported deployment ${status.toLowerCase()} before normal execution completed.`;
+      await db.$transaction([
+        db.deploymentLog.create({ data: { deploymentId: deployment.id, sequence, stage: "system", level: status === "SUCCEEDED" ? "info" : "error", message } }),
+        db.deploymentEvent.create({ data: { deploymentId: deployment.id, type: "deployment.status", payload: { deploymentId: deployment.id, status } } }),
+        db.deploymentEvent.create({ data: { deploymentId: deployment.id, type: "log.appended", payload: { sequence, stage: "system", level: status === "SUCCEEDED" ? "info" : "error", message } } }),
+      ]);
+    }
+    return this.notifications.deploymentResult(deployment.id, status);
   }
 }
 
