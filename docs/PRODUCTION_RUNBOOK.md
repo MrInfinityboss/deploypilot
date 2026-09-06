@@ -93,7 +93,7 @@ The worker should also print periodic heartbeat messages. A completed job prints
 Users do not need to keep VS Code open after installing the worker service. On Linux, run the installer from a terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MrInfinityboss/deploypilot/v1.0.1/scripts/install-worker.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MrInfinityboss/deploypilot/v1.0.2/scripts/install-worker.sh | bash
 ```
 
 The installer prompts for the API URL, worker ID, worker token, and shared Redis URL. It installs the worker under `~/.deploypilot-worker`, stores the local environment file with restricted permissions, and creates the `deploypilot-worker` systemd service.
@@ -109,7 +109,7 @@ journalctl -u deploypilot-worker -f
 On Windows, open PowerShell and run:
 
 ```powershell
-irm https://raw.githubusercontent.com/MrInfinityboss/deploypilot/v1.0.1/scripts/install-worker.ps1 | iex
+irm https://raw.githubusercontent.com/MrInfinityboss/deploypilot/v1.0.2/scripts/install-worker.ps1 | iex
 ```
 
 The Windows installer downloads the tagged worker source, installs dependencies, stores the configuration under the current user's profile, and registers a Scheduled Task that starts at user logon and restarts after failures. The task is named `DeployPilot Worker`.

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_URL="${DEPLOYPILOT_REPO_URL:-https://github.com/MrInfinityboss/deploypilot.git}"
-VERSION="${DEPLOYPILOT_VERSION:-v1.0.1}"
+VERSION="${DEPLOYPILOT_VERSION:-v1.0.2}"
 INSTALL_DIR="${DEPLOYPILOT_WORKER_DIR:-$HOME/.deploypilot-worker}"
 SERVICE_NAME="deploypilot-worker"
 
