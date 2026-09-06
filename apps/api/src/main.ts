@@ -67,6 +67,8 @@ class AppController {
   @Get("/v1/deployments")
   async allDeployments(@Req() request: Request) {
     const user = await this.auth.user(request);
+    const deployments = await db.deployment.findMany({ where: { repository: { ownerId: user.id } }, orderBy: { createdAt: "desc" }, take: 100, select: { id: true, commitSha: true, status: true, trigger: true, createdAt: true, repository: { select: { fullName: true } }, environment: { select: { name: true } } } });
+    await Promise.all(deployments.filter((deployment) => deployment.status === DeploymentStatus.QUEUED).map((deployment) => this.queue.reconcileFailed(deployment.id)));
     return { deployments: await db.deployment.findMany({ where: { repository: { ownerId: user.id } }, orderBy: { createdAt: "desc" }, take: 100, select: { id: true, commitSha: true, status: true, trigger: true, createdAt: true, repository: { select: { fullName: true } }, environment: { select: { name: true } } } }) };
   }
 
