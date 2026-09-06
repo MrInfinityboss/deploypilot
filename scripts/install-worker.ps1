@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 $RepoUrl = if ($env:DEPLOYPILOT_REPO_URL) { $env:DEPLOYPILOT_REPO_URL } else { "https://github.com/MrInfinityboss/deploypilot.git" }
-$Version = if ($env:DEPLOYPILOT_VERSION) { $env:DEPLOYPILOT_VERSION } else { "v1.0.3" }
+$Version = if ($env:DEPLOYPILOT_VERSION) { $env:DEPLOYPILOT_VERSION } else { "v1.0.4" }
 $InstallDir = if ($env:DEPLOYPILOT_WORKER_DIR) { $env:DEPLOYPILOT_WORKER_DIR } else { Join-Path $env:USERPROFILE ".deploypilot-worker" }
 $TaskName = "DeployPilot Worker"
 
@@ -23,9 +23,12 @@ $WorkerId = Read-ClipboardValue "the Worker ID"
 $WorkerToken = Read-ClipboardValue "the Worker token" -Secret
 $RedisUrl = Read-ClipboardValue "the shared Redis URL" -Secret
 $DatabaseUrl = Read-ClipboardValue "the Supabase DATABASE_URL" -Secret
+$DatabaseUrl = $DatabaseUrl -replace '^DATABASE_URL\s*=\s*', "";
+$DatabaseUrl = $DatabaseUrl.Trim().Trim('"').Trim("'")
 
 try { $parsedApiUrl = [Uri]$ApiUrl; if (-not $parsedApiUrl.IsAbsoluteUri) { throw "invalid" } } catch { throw "The API URL is not a valid URL." }
 if ([string]::IsNullOrWhiteSpace($WorkerId) -or [string]::IsNullOrWhiteSpace($WorkerToken) -or [string]::IsNullOrWhiteSpace($RedisUrl) -or [string]::IsNullOrWhiteSpace($DatabaseUrl)) { throw "All worker values are required." }
+if (-not ($DatabaseUrl.StartsWith("postgresql://") -or $DatabaseUrl.StartsWith("postgres://"))) { throw "DATABASE_URL must start with postgresql:// or postgres://. Copy the full Supabase connection string, not the variable name or a masked value." }
 
 if (-not (Test-Path (Join-Path $InstallDir ".git"))) {
   if (Test-Path $InstallDir) { Remove-Item $InstallDir -Recurse -Force }
@@ -41,7 +44,7 @@ WORKER_ID=$WorkerId
 WORKER_TOKEN=$WorkerToken
 REDIS_URL=$RedisUrl
 DATABASE_URL=$DatabaseUrl
-WORKER_VERSION=1.0.3
+WORKER_VERSION=1.0.4
 "@ | Set-Content (Join-Path $InstallDir ".env") -NoNewline
 
 Push-Location $InstallDir

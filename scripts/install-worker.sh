@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_URL="${DEPLOYPILOT_REPO_URL:-https://github.com/MrInfinityboss/deploypilot.git}"
-VERSION="${DEPLOYPILOT_VERSION:-v1.0.3}"
+VERSION="${DEPLOYPILOT_VERSION:-v1.0.4}"
 INSTALL_DIR="${DEPLOYPILOT_WORKER_DIR:-$HOME/.deploypilot-worker}"
 SERVICE_NAME="deploypilot-worker"
 
@@ -17,8 +17,11 @@ read -r -s -p "Worker token: " WORKER_TOKEN
 echo
 read -r -p "Shared Redis URL: " REDIS_URL
 read -r -p "Supabase DATABASE_URL: " DATABASE_URL
+DATABASE_URL="${DATABASE_URL#DATABASE_URL=}"
+DATABASE_URL="${DATABASE_URL#\"}"; DATABASE_URL="${DATABASE_URL%\"}"
 
 [ -n "$API_URL" ] && [ -n "$WORKER_ID" ] && [ -n "$WORKER_TOKEN" ] && [ -n "$REDIS_URL" ] && [ -n "$DATABASE_URL" ] || { echo "All values are required"; exit 1; }
+case "$DATABASE_URL" in postgresql://*|postgres://*) ;; *) echo "DATABASE_URL must start with postgresql:// or postgres://. Copy the full Supabase connection string."; exit 1 ;; esac
 
 if [ ! -d "$INSTALL_DIR/.git" ]; then
   rm -rf "$INSTALL_DIR"
@@ -34,7 +37,7 @@ WORKER_ID=$WORKER_ID
 WORKER_TOKEN=$WORKER_TOKEN
 REDIS_URL=$REDIS_URL
 DATABASE_URL=$DATABASE_URL
-WORKER_VERSION=1.0.0
+WORKER_VERSION=1.0.4
 EOF
 chmod 600 "$INSTALL_DIR/.env"
 cd "$INSTALL_DIR"

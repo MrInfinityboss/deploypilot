@@ -43,7 +43,7 @@ The API health endpoint is available at `http://localhost:4000/health`. The web 
 For a user-controlled production worker, use the tagged installer instead of keeping VS Code open:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MrInfinityboss/deploypilot/v1.0.3/scripts/install-worker.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MrInfinityboss/deploypilot/v1.0.4/scripts/install-worker.sh | bash
 ```
 
 Windows users can run the PowerShell installer described in [`docs/PRODUCTION_RUNBOOK.md`](docs/PRODUCTION_RUNBOOK.md). Both installers configure the worker as an automatically restarting background service.
