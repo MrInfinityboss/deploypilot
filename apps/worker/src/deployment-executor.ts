@@ -13,13 +13,18 @@ export class DeploymentExecutor {
 
     const cancellation = new AbortController();
     let cancellationCheckRunning = false;
+    let pendingCancellationCheck: Promise<void> | undefined;
     const cancellationMonitor = setInterval(() => {
       if (cancellationCheckRunning) return;
       cancellationCheckRunning = true;
-      void db.deployment.findUnique({ where: { id: deploymentId }, select: { status: true } }).then((deployment) => {
+      pendingCancellationCheck = db.deployment.findUnique({ where: { id: deploymentId }, select: { status: true } }).then((deployment) => {
         if (deployment?.status === DeploymentStatus.CANCELLED) cancellation.abort();
       }).catch(() => undefined).finally(() => { cancellationCheckRunning = false; });
     }, 2_500);
+    const stopCancellationMonitor = async () => {
+      clearInterval(cancellationMonitor);
+      await pendingCancellationCheck;
+    };
 
     try {
       const deployment = await db.deployment.findUniqueOrThrow({ where: { id: deploymentId }, include: { config: true, repository: true } });
@@ -59,6 +64,7 @@ export class DeploymentExecutor {
       await this.log(deploymentId, "system", "info", "Deployment succeeded");
       return { status: DeploymentStatus.SUCCEEDED };
     } catch (error) {
+      await stopCancellationMonitor();
       if (error instanceof DockerExecutionCancelledError || cancellation.signal.aborted) {
         await this.markCancelled(deploymentId);
         return { status: DeploymentStatus.CANCELLED };
