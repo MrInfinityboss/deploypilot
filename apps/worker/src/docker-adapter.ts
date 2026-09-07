@@ -20,10 +20,11 @@ export class DockerAdapter {
   async build(image: string, context: string, profile: BuildProfile, policy: DockerExecutionPolicy, signal?: AbortSignal) {
     this.assertSafe(image, context, policy);
     const timeout = Math.min(profile.timeoutSeconds, policy.timeoutSeconds) * 1000;
-    // Buildx does not support the runtime flags --cpus, --pids-limit, or --memory on `docker build`.
-    // Keep the build invocation isolated and apply resource limits at container runtime when that
-    // execution path is enabled. Never interpolate repository-controlled values into a shell string.
-    return this.run("docker", ["build", "--tag", image, "--network", policy.networkMode, context], timeout, signal);
+    // Buildx does not support runtime resource flags or the Docker Engine `bridge` network on
+    // `docker build`. Let the configured BuildKit builder choose its default build network and
+    // apply resource limits at container runtime when that execution path is enabled. Never
+    // interpolate repository-controlled values into a shell string.
+    return this.run("docker", ["build", "--tag", image, context], timeout, signal);
   }
 
   private assertSafe(image: string, context: string, policy: DockerExecutionPolicy) {

@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 $RepoUrl = if ($env:DEPLOYPILOT_REPO_URL) { $env:DEPLOYPILOT_REPO_URL } else { "https://github.com/MrInfinityboss/deploypilot.git" }
-$Version = if ($env:DEPLOYPILOT_VERSION) { $env:DEPLOYPILOT_VERSION } else { "v1.0.9" }
+$Version = if ($env:DEPLOYPILOT_VERSION) { $env:DEPLOYPILOT_VERSION } else { "v1.0.10" }
 $InstallDir = if ($env:DEPLOYPILOT_WORKER_DIR) { $env:DEPLOYPILOT_WORKER_DIR } else { Join-Path $env:USERPROFILE ".deploypilot-worker" }
 $TaskName = "DeployPilot Worker"
 
@@ -44,7 +44,7 @@ WORKER_ID=$WorkerId
 WORKER_TOKEN=$WorkerToken
 REDIS_URL=$RedisUrl
 DATABASE_URL=$DatabaseUrl
-WORKER_VERSION=1.0.9
+WORKER_VERSION=1.0.10
 "@ | Set-Content (Join-Path $InstallDir ".env") -NoNewline
 
 Push-Location $InstallDir
