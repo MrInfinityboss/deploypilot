@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import type { BuildProfile } from "@deploypilot/shared";
 
 export type DockerExecutionPolicy = {
@@ -24,7 +25,8 @@ export class DockerAdapter {
     // `docker build`. Let the configured BuildKit builder choose its default build network and
     // apply resource limits at container runtime when that execution path is enabled. Never
     // interpolate repository-controlled values into a shell string.
-    return this.run("docker", ["build", "--tag", image, context], timeout, signal);
+    const dockerfile = existsSync("apps/worker/Dockerfile") ? "apps/worker/Dockerfile" : "Dockerfile";
+    return this.run("docker", ["build", "--file", dockerfile, "--tag", image, context], timeout, signal);
   }
 
   private assertSafe(image: string, context: string, policy: DockerExecutionPolicy) {

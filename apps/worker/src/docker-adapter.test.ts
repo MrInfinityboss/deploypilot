@@ -55,6 +55,6 @@ describe("DockerAdapter safety boundary", () => {
     const promise = adapter.build("safe-image", ".", profile, policy);
     child.emit("close", 0);
     await expect(promise).resolves.toMatchObject({ code: 0 });
-    expect(mockedSpawn).toHaveBeenCalledWith("docker", ["build", "--tag", "safe-image", "."], expect.anything());
+    expect(mockedSpawn).toHaveBeenCalledWith("docker", ["build", "--file", "Dockerfile", "--tag", "safe-image", "."], expect.anything());
   });
 });
