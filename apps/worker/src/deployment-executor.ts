@@ -12,11 +12,14 @@ export class DeploymentExecutor {
     if (claimed.count !== 1) return { skipped: true };
 
     const cancellation = new AbortController();
+    let cancellationCheckRunning = false;
     const cancellationMonitor = setInterval(() => {
+      if (cancellationCheckRunning) return;
+      cancellationCheckRunning = true;
       void db.deployment.findUnique({ where: { id: deploymentId }, select: { status: true } }).then((deployment) => {
         if (deployment?.status === DeploymentStatus.CANCELLED) cancellation.abort();
-      }).catch(() => undefined);
-    }, 1_000);
+      }).catch(() => undefined).finally(() => { cancellationCheckRunning = false; });
+    }, 2_500);
 
     try {
       const deployment = await db.deployment.findUniqueOrThrow({ where: { id: deploymentId }, include: { config: true, repository: true } });
@@ -56,7 +59,7 @@ export class DeploymentExecutor {
       await this.log(deploymentId, "system", "info", "Deployment succeeded");
       return { status: DeploymentStatus.SUCCEEDED };
     } catch (error) {
-      if (error instanceof DockerExecutionCancelledError || cancellation.signal.aborted || await this.isCancelled(deploymentId)) {
+      if (error instanceof DockerExecutionCancelledError || cancellation.signal.aborted) {
         await this.markCancelled(deploymentId);
         return { status: DeploymentStatus.CANCELLED };
       }
@@ -81,15 +84,10 @@ export class DeploymentExecutor {
   }
 
   private async throwIfCancelled(deploymentId: string, cancellation: AbortController) {
-    if (cancellation.signal.aborted || await this.isCancelled(deploymentId)) {
+    if (cancellation.signal.aborted) {
       cancellation.abort();
       throw new DockerExecutionCancelledError();
     }
-  }
-
-  private async isCancelled(deploymentId: string) {
-    const deployment = await db.deployment.findUnique({ where: { id: deploymentId }, select: { status: true } });
-    return deployment?.status === DeploymentStatus.CANCELLED;
   }
 
   private async markCancelled(deploymentId: string) {
