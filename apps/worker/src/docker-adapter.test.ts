@@ -48,13 +48,13 @@ describe("DockerAdapter safety boundary", () => {
     expect(child.kill).toHaveBeenCalledWith("SIGTERM");
   });
 
-  it("passes resource limits to Docker", async () => {
+  it("passes the supported network policy to Docker", async () => {
     const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; stderr: EventEmitter };
     child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
     mockedSpawn.mockReturnValue(child as never);
     const promise = adapter.build("safe-image", ".", profile, policy);
     child.emit("close", 0);
     await expect(promise).resolves.toMatchObject({ code: 0 });
-    expect(mockedSpawn).toHaveBeenCalledWith("docker", expect.arrayContaining(["--memory", "512m", "--cpus", "1", "--pids-limit", "128", "--network", "none"]), expect.anything());
+    expect(mockedSpawn).toHaveBeenCalledWith("docker", expect.arrayContaining(["--network", "none"]), expect.anything());
   });
 });
